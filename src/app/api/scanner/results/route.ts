@@ -14,7 +14,18 @@ export async function GET(request: NextRequest) {
       debug: {
         hasUrl: !!supabaseUrl,
         hasKey: !!supabaseAnonKey,
+        urlPreview: supabaseUrl ? supabaseUrl.slice(0, 40) + "..." : "MISSING",
       },
+    });
+  }
+
+  // Validate URL format
+  if (!supabaseUrl.includes("supabase.co")) {
+    return NextResponse.json({
+      error: `Invalid NEXT_PUBLIC_SUPABASE_URL — must be a supabase.co URL, got: ${supabaseUrl.slice(0, 50)}`,
+      results: [],
+      lastUpdated: null,
+      totalSymbols: 0,
     });
   }
 
