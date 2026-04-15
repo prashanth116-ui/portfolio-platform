@@ -1,36 +1,102 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Prashanth Sundaram — Portfolio & Tools
+
+A unified portfolio platform built with Next.js 14, showcasing software projects, trading systems, and a live stock scanner.
+
+## Tech Stack
+
+- **Framework**: Next.js 14 (App Router) + TypeScript
+- **Styling**: Tailwind CSS v4 + shadcn/ui components
+- **Charts**: react-plotly.js (equity curves, P/L bars, pie charts)
+- **Diagrams**: Mermaid.js (strategy flow diagrams)
+- **Database**: Supabase (PostgreSQL) for scanner data
+- **Hosting**: Vercel with cron jobs
+- **Data Feed**: TradingView screener via Python + Finnhub API fallback
+
+## Routes
+
+| Route | Description |
+|-------|-------------|
+| `/` | Home — hero, metrics, featured projects |
+| `/projects` | All 15 projects grouped by status |
+| `/trading` | Trading systems overview + strategies |
+| `/trading/flows` | 9 Mermaid strategy flow diagrams |
+| `/trading/timeline` | Version history V6→V10.16 with A/B tests |
+| `/trading/performance` | Charts, metrics, daily breakdown (privacy toggle) |
+| `/scanner` | Live stock scanner with filters and sorting |
+| `/astrology` | Coming soon placeholder |
 
 ## Getting Started
 
-First, run the development server:
-
 ```bash
+# Install dependencies
+npm install
+
+# Copy env template
+cp .env.example .env.local
+# Fill in your Supabase and Finnhub keys
+
+# Run development server
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Environment Variables
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+See `.env.example` for required variables:
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` — Supabase connection
+- `SUPABASE_SERVICE_ROLE_KEY` — Server-side Supabase access
+- `FINNHUB_API_KEY` — Stock data API (free tier: 60 calls/min)
+- `CRON_SECRET` — Protects the `/api/scanner/fetch` endpoint
+- `NEXT_PUBLIC_APP_URL` — Your deployed URL
 
-## Learn More
+## Scanner Setup
 
-To learn more about Next.js, take a look at the following resources:
+1. Create tables in Supabase using `supabase/schema.sql`
+2. Optionally seed demo data with `supabase/seed.sql`
+3. Set env vars in Vercel
+4. Vercel cron runs `/api/scanner/fetch` every 15 min during market hours (Mon-Fri 9AM-4PM)
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+For local testing with TradingView data:
+```bash
+pip install tradingview-screener supabase
+python scripts/fetch_tv_data.py
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Deploy to Vercel
 
-## Deploy on Vercel
+1. Push to GitHub
+2. Import in Vercel
+3. Add environment variables
+4. Deploy — zero code changes needed
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+src/
+├── app/
+│   ├── page.tsx              # Home
+│   ├── projects/page.tsx     # Projects grid
+│   ├── trading/
+│   │   ├── page.tsx          # Trading overview
+│   │   ├── flows/page.tsx    # Mermaid diagrams
+│   │   ├── timeline/page.tsx # Version history
+│   │   └── performance/page.tsx # Charts & metrics
+│   ├── scanner/page.tsx      # Stock scanner
+│   ├── astrology/page.tsx    # Placeholder
+│   └── api/scanner/          # Scanner API routes
+├── components/
+│   ├── ui/                   # shadcn base components
+│   ├── charts/               # Plotly chart wrappers
+│   ├── nav.tsx               # Navigation header
+│   ├── project-card.tsx      # Project cards
+│   ├── strategy-card.tsx     # Strategy cards
+│   └── mermaid-diagram.tsx   # Mermaid renderer
+├── data/                     # Static data (migrated from Streamlit JSON)
+└── lib/                      # Utilities + Supabase client
+scripts/
+    fetch_tv_data.py          # TradingView screener → Supabase
+supabase/
+    schema.sql                # Database tables + RLS
+    seed.sql                  # Demo data
+```

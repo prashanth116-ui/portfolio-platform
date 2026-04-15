@@ -1,0 +1,109 @@
+export interface EntryType {
+  type: string;
+  name: string;
+  description: string;
+}
+
+export interface ExitStructure {
+  t1: string;
+  t2: string;
+  runner: string;
+  trail_trigger?: string;
+}
+
+export interface Strategy {
+  id: string;
+  name: string;
+  github_url: string;
+  version: string;
+  status: "ACTIVE" | "IN_DEVELOPMENT" | "EXPERIMENTAL" | "DEPRECATED";
+  color: string;
+  instruments: string[];
+  description: string;
+  entry_types?: EntryType[];
+  exit_structure?: ExitStructure;
+  filters?: string[];
+  tech_stack: string[];
+}
+
+export const strategies: Strategy[] = [
+  {
+    id: "v10_fvg",
+    name: "ICT FVG Quad Entry",
+    github_url: "https://github.com/prashanth116-ui/tradovate-futures-bot",
+    version: "V10.16",
+    status: "ACTIVE",
+    color: "green",
+    instruments: ["ES", "NQ", "MES", "MNQ", "SPY", "QQQ", "IWM"],
+    description: "Fair Value Gap strategy with 4 entry types, hybrid filter system, dynamic position sizing, and per-symbol trail optimization. Deployed on DigitalOcean with PickMyTrade webhook execution.",
+    entry_types: [
+      { type: "A", name: "Creation", description: "Enter on FVG formation with displacement (3x override skips ADX)" },
+      { type: "B1", name: "Overnight Retrace", description: "Price retraces into overnight FVG + rejection (ADX >= 22)" },
+      { type: "B2", name: "Intraday Retrace", description: "Price retraces into session FVG (2+ bars old) + rejection" },
+      { type: "C", name: "BOS + Retrace", description: "Price retraces into FVG after Break of Structure" },
+    ],
+    exit_structure: {
+      t1: "Fixed profit at 3R (1 contract)",
+      t2: "ES/MES: Fixed exit at 5R | NQ/MNQ: Structure trail with 4-tick buffer after 4R",
+      runner: "Structure trail with 6-tick buffer after 4R (1st trade only)",
+      trail_trigger: "4R (lowered from 6R in V10.16)",
+    },
+    filters: ["DI Direction", "FVG Size >= 5 ticks", "Displacement >= 1.0x", "ADX >= 11", "EMA 20/50 Trend"],
+    tech_stack: ["Python", "TradingView", "Tradovate", "DigitalOcean", "Telegram", "PickMyTrade"],
+  },
+  {
+    id: "ict_state_machine",
+    name: "ICT State Machine",
+    github_url: "https://github.com/prashanth116-ui/tradovate-futures-bot",
+    version: "V1",
+    status: "DEPRECATED",
+    color: "gray",
+    instruments: ["ES"],
+    description: "Event-driven state machine approach to ICT concepts. Replaced by V10 FVG strategy due to complexity and lower performance.",
+    tech_stack: ["Python"],
+  },
+  {
+    id: "ict_sweep",
+    name: "ICT Liquidity Sweep",
+    github_url: "https://github.com/prashanth116-ui/tradovate-futures-bot",
+    version: "V1",
+    status: "EXPERIMENTAL",
+    color: "amber",
+    instruments: ["ES", "NQ"],
+    description: "Targets liquidity sweeps above/below previous session highs/lows followed by FVG formation. Captures stop-hunt reversals.",
+    tech_stack: ["Python", "TradingView"],
+  },
+  {
+    id: "ict_ote",
+    name: "ICT Optimal Trade Entry",
+    github_url: "https://github.com/prashanth116-ui/tradovate-futures-bot",
+    version: "V1",
+    status: "EXPERIMENTAL",
+    color: "amber",
+    instruments: ["ES", "NQ"],
+    description: "Fibonacci-based entries at the 62-79% retracement zone within a higher-timeframe displacement leg. Classic ICT setup.",
+    tech_stack: ["Python", "TradingView"],
+  },
+  {
+    id: "ttfm",
+    name: "TTFM Fractal Model",
+    github_url: "https://github.com/prashanth116-ui/ttfm-strategy",
+    version: "V2.0",
+    status: "EXPERIMENTAL",
+    color: "amber",
+    instruments: ["ES", "NQ", "MES", "MNQ"],
+    description: "TTrades Fractal Model (TTFM) — mechanical system using C3/C4 candle patterns with CISD confirmation and daily bias alignment. 15m entries with 1R fixed T1 exit and 3R trail activation.",
+    tech_stack: ["Python", "TradingView"],
+  },
+  {
+    id: "htf_swing",
+    name: "ICT Multi-Timeframe Swing",
+    github_url: "https://github.com/prashanth116-ui/htf-swing-strategy",
+    version: "V1",
+    status: "IN_DEVELOPMENT",
+    color: "blue",
+    instruments: ["ES", "NQ", "CL", "GC", "SPY", "QQQ"],
+    description: "Multi-timeframe ICT swing trading for 1-2 week holds. Analyzes Daily (bias), 4H (structure), 1H (order blocks/FVGs), and 15m (precision entries). BOS/CHoCH detection, order blocks, FVG identification, and liquidity sweep detection.",
+    tech_stack: ["Python", "TradingView", "Pine Script"],
+  },
+];

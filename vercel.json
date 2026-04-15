@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/scanner/fetch",
+      "schedule": "*/15 9-16 * * 1-5"
+    }
+  ]
+}
