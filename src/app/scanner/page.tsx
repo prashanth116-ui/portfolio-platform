@@ -7,6 +7,7 @@ import {
   ArrowDown,
   RefreshCw,
   ScanSearch,
+  Download,
 } from "lucide-react";
 
 interface ScanResult {
@@ -35,6 +36,8 @@ export default function ScannerPage() {
   const [results, setResults] = useState<ScanResult[]>([]);
   const [lastUpdated, setLastUpdated] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [fetching, setFetching] = useState(false);
+  const [fetchMsg, setFetchMsg] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const [sector, setSector] = useState("All Sectors");
@@ -55,14 +58,15 @@ export default function ScannerPage() {
       const res = await fetch(`/api/scanner/results?${params}`);
       const data = await res.json();
 
-      if (data.error && !data.results) {
+      if (data.error && !data.results?.length) {
         setError(data.error);
       } else {
         setResults(data.results ?? []);
         setLastUpdated(data.lastUpdated);
+        setError(null);
       }
     } catch {
-      setError("Failed to fetch scanner data. Check your Supabase configuration.");
+      setError("Failed to fetch scanner data.");
       setResults([]);
     }
     setLoading(false);
@@ -71,6 +75,30 @@ export default function ScannerPage() {
   useEffect(() => {
     fetchResults();
   }, [fetchResults]);
+
+  const triggerFetch = async () => {
+    setFetching(true);
+    setFetchMsg(null);
+    try {
+      const res = await fetch("/api/scanner/fetch", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${prompt("Enter your CRON_SECRET:")}` },
+      });
+      const data = await res.json();
+      if (data.success) {
+        setFetchMsg(`Fetched ${data.symbolsFetched} stocks. Refreshing...`);
+        setTimeout(() => {
+          fetchResults();
+          setFetchMsg(null);
+        }, 2000);
+      } else {
+        setFetchMsg(`Error: ${data.error}`);
+      }
+    } catch {
+      setFetchMsg("Failed to trigger fetch.");
+    }
+    setFetching(false);
+  };
 
   const toggleSort = (key: SortKey) => {
     if (sortKey === key) {
@@ -108,22 +136,67 @@ export default function ScannerPage() {
     return "text-[#a0a0a0]";
   };
 
+  // Summary stats
+  const bullishCount = results.filter((r) => r.signal === "Bullish").length;
+  const bearishCount = results.filter((r) => r.signal === "Bearish").length;
+  const avgChange = results.length > 0
+    ? results.reduce((s, r) => s + r.change_pct, 0) / results.length
+    : 0;
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       <section>
-        <div className="flex items-center gap-3">
-          <ScanSearch className="h-8 w-8 text-[#5ba3e6]" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              Stock Scanner
-            </h1>
-            <p className="mt-1 text-[#a0a0a0]">
-              Pre-run TradingView screener data, updated every 15 minutes during
-              market hours.
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <ScanSearch className="h-8 w-8 text-[#5ba3e6]" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                Stock Scanner
+              </h1>
+              <p className="mt-1 text-[#a0a0a0]">
+                150+ stocks updated daily via Finnhub. Filter by sector and signal.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={triggerFetch}
+            disabled={fetching}
+            className="hidden items-center gap-1.5 rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-2 text-sm text-[#a0a0a0] transition-colors hover:text-white disabled:opacity-50 sm:flex"
+          >
+            <Download className={`h-3.5 w-3.5 ${fetching ? "animate-spin" : ""}`} />
+            {fetching ? "Fetching..." : "Fetch Live Data"}
+          </button>
+        </div>
+        {fetchMsg && (
+          <p className={`mt-2 text-sm ${fetchMsg.startsWith("Error") ? "text-red-400" : "text-green-400"}`}>
+            {fetchMsg}
+          </p>
+        )}
+      </section>
+
+      {/* Summary stats */}
+      {results.length > 0 && (
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
+            <p className="text-xs text-[#a0a0a0]">Total Stocks</p>
+            <p className="text-xl font-bold text-white">{results.length}</p>
+          </div>
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
+            <p className="text-xs text-[#a0a0a0]">Bullish</p>
+            <p className="text-xl font-bold text-green-400">{bullishCount}</p>
+          </div>
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
+            <p className="text-xs text-[#a0a0a0]">Bearish</p>
+            <p className="text-xl font-bold text-red-400">{bearishCount}</p>
+          </div>
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3">
+            <p className="text-xs text-[#a0a0a0]">Avg Change</p>
+            <p className={`text-xl font-bold ${avgChange >= 0 ? "text-green-400" : "text-red-400"}`}>
+              {avgChange >= 0 ? "+" : ""}{avgChange.toFixed(2)}%
             </p>
           </div>
         </div>
-      </section>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
@@ -172,12 +245,15 @@ export default function ScannerPage() {
         <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-12 text-center">
           <ScanSearch className="mx-auto h-12 w-12 text-[#333]" />
           <p className="mt-4 text-[#a0a0a0]">
-            No scan results yet. Configure your Supabase connection and run the
-            fetch script.
+            No scan results yet. Click &quot;Fetch Live Data&quot; to pull the latest stock data.
           </p>
-          <p className="mt-2 text-xs text-[#555]">
-            python scripts/fetch_tv_data.py
-          </p>
+          <button
+            onClick={triggerFetch}
+            disabled={fetching}
+            className="mt-4 rounded-md bg-[#185FA5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1a6dba] disabled:opacity-50"
+          >
+            {fetching ? "Fetching..." : "Fetch Live Data"}
+          </button>
         </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-[#2a2a2a]">
