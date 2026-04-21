@@ -533,39 +533,36 @@ export default function EWScannerPage() {
       </div>
 
       {/* ── Deep Analysis Modal ── */}
-      <Dialog.Root
-        open={!!deepTicker}
-        onOpenChange={(open) => {
-          if (!open) setDeepTicker(null);
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
-            <div className="mb-4 flex items-center justify-between">
-              <Dialog.Title className="text-lg font-bold text-white">
-                {deepTicker} — Deep Analysis
-              </Dialog.Title>
-              <Dialog.Close className="rounded-md p-1 text-[#a0a0a0] hover:text-white">
-                <X className="h-5 w-5" />
-              </Dialog.Close>
-            </div>
+      {deepTicker && (
+        <Dialog.Root open onOpenChange={() => setDeepTicker(null)}>
+          <Dialog.Portal>
+            <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
+              <div className="mb-4 flex items-center justify-between">
+                <Dialog.Title className="text-lg font-bold text-white">
+                  {deepTicker} — Deep Analysis
+                </Dialog.Title>
+                <Dialog.Close className="rounded-md p-1 text-[#a0a0a0] hover:text-white">
+                  <X className="h-5 w-5" />
+                </Dialog.Close>
+              </div>
 
-            {deepLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-[#5ba3e6]" />
-                <span className="ml-2 text-sm text-[#a0a0a0]">Analyzing...</span>
-              </div>
-            ) : (
-              <div className="max-h-[60vh] overflow-y-auto pr-2">
-                <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#c0c0c0]">
-                  {deepAnalysis}
+              {deepLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-[#5ba3e6]" />
+                  <span className="ml-2 text-sm text-[#a0a0a0]">Analyzing...</span>
                 </div>
-              </div>
-            )}
-          </Dialog.Content>
-        </Dialog.Portal>
-      </Dialog.Root>
+              ) : (
+                <div className="max-h-[60vh] overflow-y-auto pr-2">
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#c0c0c0]">
+                    {deepAnalysis}
+                  </div>
+                </div>
+              )}
+            </Dialog.Content>
+          </Dialog.Portal>
+        </Dialog.Root>
+      )}
     </div>
   );
 }
