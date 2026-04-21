@@ -15,6 +15,9 @@ import {
   Brain,
   Crosshair,
   Zap,
+  Ruler,
+  Volume2,
+  ListChecks,
 } from "lucide-react";
 
 /* ═══════════════════════════════════════════════════════
@@ -216,6 +219,95 @@ function WaveNestingDiagram() {
   );
 }
 
+function ChannelingDiagram() {
+  // 5-wave impulse with base channel and acceleration channel
+  // Wave points: 0(40,260) 1(110,170) 2(155,230) 3(260,60) 4(320,130) 5(395,40)
+  return (
+    <div className="my-6 flex justify-center">
+      <svg viewBox="0 0 520 310" className="w-full max-w-lg" aria-label="Elliott Wave channeling technique">
+        {/* Base channel: line through 0 and 2, parallel through 1 */}
+        <line x1="10" y1="275" x2="450" y2="178" stroke="#f59e0b" strokeWidth="1" strokeDasharray="6 3" opacity="0.5" />
+        <line x1="80" y1="185" x2="450" y2="108" stroke="#f59e0b" strokeWidth="1" strokeDasharray="6 3" opacity="0.5" />
+        <text x="452" y="175" fontSize="9" fill="#f59e0b" opacity="0.7">Base channel (0→2)</text>
+        <text x="452" y="105" fontSize="9" fill="#f59e0b" opacity="0.7">Parallel thru 1</text>
+
+        {/* Acceleration channel: line through 2 and 4, parallel through 3 */}
+        <line x1="120" y1="260" x2="470" y2="122" stroke="#22c55e" strokeWidth="1.2" strokeDasharray="5 3" opacity="0.6" />
+        <line x1="225" y1="88" x2="470" y2="-8" stroke="#22c55e" strokeWidth="1.2" strokeDasharray="5 3" opacity="0.6" />
+        <text x="380" y="140" fontSize="9" fill="#22c55e" opacity="0.8">Accel channel (2→4)</text>
+        <text x="410" y="15" fontSize="9" fill="#22c55e" opacity="0.8">→ W5 target zone</text>
+
+        {/* Impulse wave */}
+        <polyline points="40,260 110,170 155,230 260,60 320,130 395,40" fill="none" stroke="#5ba3e6" strokeWidth="2.5" strokeLinejoin="round" />
+
+        {/* Labels */}
+        <text x="28" y="272" fontSize="13" fill="#a0a0a0" fontWeight="bold">0</text>
+        <text x="103" y="162" fontSize="13" fill="#5ba3e6" fontWeight="bold">1</text>
+        <text x="148" y="248" fontSize="13" fill="#5ba3e6" fontWeight="bold">2</text>
+        <text x="253" y="52" fontSize="13" fill="#5ba3e6" fontWeight="bold">3</text>
+        <text x="323" y="145" fontSize="13" fill="#5ba3e6" fontWeight="bold">4</text>
+        <text x="388" y="32" fontSize="13" fill="#5ba3e6" fontWeight="bold">5</text>
+
+        {/* W5 target zone highlight */}
+        <rect x="375" y="20" width="40" height="35" fill="#22c55e" opacity="0.08" rx="3" />
+        <text x="378" y="68" fontSize="8" fill="#22c55e">Target</text>
+
+        {/* Wave 3 overshoot arrow */}
+        <line x1="260" y1="60" x2="260" y2="90" stroke="#f59e0b" strokeWidth="1.5" opacity="0.6" />
+        <text x="218" y="100" fontSize="8" fill="#f59e0b" opacity="0.8">W3 overshoot</text>
+      </svg>
+    </div>
+  );
+}
+
+function VolumePatternDiagram() {
+  // Volume bars under a 5-wave impulse showing typical volume pattern
+  const wavePoints = "40,160 100,100 135,135 220,30 270,75 330,20";
+  // Volume heights (relative): W1=40, W2=25, W3=80, W4=20, W5=35
+  const volumes = [
+    { x: 60, h: 40, label: "W1", color: "#5ba3e6" },
+    { x: 110, h: 25, label: "W2", color: "#a0a0a0" },
+    { x: 170, h: 80, label: "W3", color: "#22c55e" },
+    { x: 240, h: 20, label: "W4", color: "#a0a0a0" },
+    { x: 295, h: 35, label: "W5", color: "#ef4444" },
+  ];
+  const baseY = 270;
+  return (
+    <div className="my-6 flex justify-center">
+      <svg viewBox="0 0 420 300" className="w-full max-w-md" aria-label="Volume pattern across Elliott waves">
+        {/* Price line */}
+        <polyline points={wavePoints} fill="none" stroke="#5ba3e6" strokeWidth="2" strokeLinejoin="round" />
+        {/* Price labels */}
+        <text x="93" y="93" fontSize="11" fill="#5ba3e6" fontWeight="bold">1</text>
+        <text x="128" y="150" fontSize="11" fill="#5ba3e6" fontWeight="bold">2</text>
+        <text x="213" y="23" fontSize="11" fill="#5ba3e6" fontWeight="bold">3</text>
+        <text x="273" y="88" fontSize="11" fill="#5ba3e6" fontWeight="bold">4</text>
+        <text x="323" y="15" fontSize="11" fill="#5ba3e6" fontWeight="bold">5</text>
+
+        {/* Separator */}
+        <line x1="30" y1="185" x2="380" y2="185" stroke="#2a2a2a" strokeWidth="1" />
+        <text x="385" y="189" fontSize="9" fill="#666">Volume</text>
+
+        {/* Volume bars */}
+        {volumes.map((v) => (
+          <g key={v.label}>
+            <rect x={v.x} y={baseY - v.h} width="30" height={v.h} rx="2" fill={v.color} opacity="0.3" />
+            <rect x={v.x} y={baseY - v.h} width="30" height={v.h} rx="2" stroke={v.color} strokeWidth="1" fill="none" opacity="0.6" />
+            <text x={v.x + 15} y={baseY + 14} fontSize="9" fill="#a0a0a0" textAnchor="middle">{v.label}</text>
+          </g>
+        ))}
+
+        {/* Divergence arrow between W3 and W5 volume */}
+        <line x1="185" y1={baseY - 80 - 5} x2="310" y2={baseY - 35 - 5} stroke="#ef4444" strokeWidth="1.2" strokeDasharray="4" />
+        <text x="230" y={baseY - 55} fontSize="9" fill="#ef4444" fontWeight="600">Volume divergence</text>
+
+        {/* Peak label on W3 */}
+        <text x="60" y={baseY - 82} fontSize="8" fill="#22c55e">Highest vol</text>
+      </svg>
+    </div>
+  );
+}
+
 /* ═══════════════════════════════════════════════════════
    HELPER COMPONENTS
    ═══════════════════════════════════════════════════════ */
@@ -294,6 +386,9 @@ const MODULES = [
   { n: 6, title: "Multi-Timeframe Analysis", icon: Crosshair, desc: "Nine degrees, top-down workflow, and the golden rule" },
   { n: 7, title: "Trading Application", icon: TrendingDown, desc: "Highest-probability setups, stop placement, position management" },
   { n: 8, title: "Mindset", icon: Brain, desc: "Probabilistic thinking and the three principles to internalize" },
+  { n: 9, title: "Channeling & Guidelines", icon: Ruler, desc: "Parallel channels, alternation, proportionality — the visual tools that project targets" },
+  { n: 10, title: "Wave Personality & Volume", icon: Volume2, desc: "Each wave's character, sentiment, and how volume confirms your count" },
+  { n: 11, title: "Practical Counting", icon: ListChecks, desc: "Step-by-step process for counting waves on a real chart, plus common mistakes" },
 ];
 
 /* ═══════════════════════════════════════════════════════
@@ -852,6 +947,248 @@ export default function EWLearnPage() {
             </div>
           </ModuleShell>
 
+          {/* =============== MODULE 9 — CHANNELING & GUIDELINES =============== */}
+          <ModuleShell n={9} open={!!open[9]} toggle={toggle}>
+            <SectionH3>9.1 The Channeling Technique</SectionH3>
+            <Prose>
+              <p>
+                Parallel channels are one of the most <strong className="text-white">actionable</strong> tools
+                in EW. They project where waves will end before they get there.
+              </p>
+            </Prose>
+
+            <ChannelingDiagram />
+
+            <Prose>
+              <p><strong className="text-[#f59e0b]">Base Channel</strong> (early trend):</p>
+              <ol className="list-inside list-decimal space-y-1.5">
+                <li>Draw a line from the start of wave 1 (point 0) through the end of wave 2</li>
+                <li>Draw a parallel line through the peak of wave 1</li>
+                <li>Wave 3 should <strong className="text-white">overshoot</strong> the upper line — if it doesn&apos;t, the move may not be a wave 3</li>
+              </ol>
+              <p className="mt-3"><strong className="text-[#22c55e]">Acceleration Channel</strong> (mature trend):</p>
+              <ol className="list-inside list-decimal space-y-1.5">
+                <li>Draw a line from wave 2&apos;s end through wave 4&apos;s end</li>
+                <li>Draw a parallel line through wave 3&apos;s peak</li>
+                <li>The upper parallel <strong className="text-white">projects wave 5&apos;s target zone</strong></li>
+                <li>Price touching or slightly overshooting this line is a common wave 5 termination point</li>
+              </ol>
+            </Prose>
+
+            <Callout type="info">
+              <p className="text-sm text-[#e6e6e6]">
+                <strong>Pro tip:</strong> If wave 5 fails to reach the upper acceleration channel, suspect a
+                truncation. If it throws over aggressively, suspect an ending diagonal with reversal imminent.
+              </p>
+            </Callout>
+
+            <SectionH3>9.2 The Alternation Guideline</SectionH3>
+            <Prose>
+              <p>
+                If wave 2 and wave 4 are both corrections within the same impulse, they tend to
+                <strong className="text-white"> alternate in form</strong>:
+              </p>
+            </Prose>
+            <DataTable
+              headers={["Wave 2 Type", "Wave 4 Tends To Be", "Logic"]}
+              rows={[
+                ["Sharp (zigzag)", "Flat or triangle (sideways)", "Market alternates between panic and consolidation"],
+                ["Flat (sideways)", "Sharp (zigzag)", "After grinding sideways, the next pullback is decisive"],
+                ["Simple pattern", "Complex pattern", "Single zigzag vs. combination (W-X-Y)"],
+                ["Deep retrace (61.8%+)", "Shallow retrace (23.6–38.2%)", "Price alternates depth of pullbacks"],
+              ]}
+            />
+            <Callout type="warn">
+              <p className="text-sm text-amber-200">
+                Alternation is a <strong>guideline</strong>, not a rule — it doesn&apos;t always hold. But when
+                wave 2 was a sharp zigzag (which is most common), expecting wave 4 to be a flat
+                or triangle has a strong hit rate.
+              </p>
+            </Callout>
+
+            <SectionH3>9.3 Guideline of Proportionality</SectionH3>
+            <Prose>
+              <p>
+                Corrective waves should be <strong className="text-white">proportional in both price
+                and time</strong> to the impulse they correct:
+              </p>
+              <ul className="list-inside list-disc space-y-1.5">
+                <li>If wave 1 took 3 weeks and retraced 200 points, wave 2 shouldn&apos;t take 6 months to retrace 50 points — the proportions are wrong</li>
+                <li>Wave 4 typically takes <strong className="text-white">equal or more time</strong> than wave 2 (price consumed time instead of distance)</li>
+                <li>Corrections at the same degree should be roughly proportional to each other</li>
+                <li>If your correction looks tiny compared to the impulse it&apos;s correcting, you probably have the degree wrong — it&apos;s likely a sub-wave correction, not the full corrective wave</li>
+              </ul>
+            </Prose>
+            <Callout type="rule">
+              <p className="text-sm text-[#e6e6e6]">
+                <strong>The right-look principle:</strong> A correct wave count should look
+                &quot;balanced&quot; — waves proportional in size and duration. If the count looks
+                forced or aesthetically wrong, it probably is wrong.
+              </p>
+            </Callout>
+
+            <SectionH3>9.4 Guideline of Equality</SectionH3>
+            <Prose>
+              <p>
+                Two of the three impulse waves (1, 3, 5) tend toward <strong className="text-white">equality
+                in length</strong>. In practice:
+              </p>
+              <ul className="list-inside list-disc space-y-1.5">
+                <li>When wave 3 extends (most common): <strong className="text-white">wave 1 ≈ wave 5</strong> in price distance</li>
+                <li>When wave 5 extends: waves 1 and 3 are roughly equal</li>
+                <li>When wave 1 extends (rare): waves 3 and 5 tend toward equality</li>
+              </ul>
+              <p className="mt-2">
+                This gives you a <strong className="text-white">wave 5 price target</strong> before it begins:
+                measure wave 1&apos;s length and project it from wave 4&apos;s end.
+              </p>
+            </Prose>
+          </ModuleShell>
+
+          {/* =============== MODULE 10 — WAVE PERSONALITY & VOLUME =============== */}
+          <ModuleShell n={10} open={!!open[10]} toggle={toggle}>
+            <SectionH3>10.1 Wave Personality</SectionH3>
+            <Prose>
+              <p>
+                Each wave has a distinct <strong className="text-white">character</strong> in terms of sentiment,
+                news flow, and market behavior. Learning these personalities lets you identify waves
+                in real time without perfect structure.
+              </p>
+            </Prose>
+            <DataTable
+              headers={["Wave", "Personality", "Sentiment / News"]}
+              rows={[
+                ["1", "Hesitant, low-conviction rally. Often mistaken for a bear market bounce. Narrow participation — few believers.", "Still bearish. Media calls it a dead-cat bounce. Short-sellers add positions."],
+                ["2", "Fear returns. Feels like the downtrend is resuming. Deep retrace shakes out early longs.", "Bad news resurfaces. \"See? I told you it wasn't over.\" Short interest rises again."],
+                ["3", "Explosive. Broadening participation, gaps up, breakouts everywhere. This is the recognition wave.", "Fundamentals improve. Upgrades pour in. Media turns bullish. The crowd finally agrees with the trend."],
+                ["4", "Grinding, frustrating, choppy. Often goes sideways in a complex correction. Traders get bored or whipsawed.", "No new bad news — just indecision. \"Healthy consolidation\" narrative. Volatility drops."],
+                ["5", "Final push. Fewer stocks participating. Momentum diverges. Euphoria. This is where retail piles in.", "All-time bullish sentiment. IPO frenzy. Media declares new paradigm. \"This time it's different.\""],
+                ["A", "Sharp decline, but most think it's just a pullback. \"Buy the dip\" mentality dominates.", "News remains positive. Analysts say correction is healthy. Dip-buyers emerge."],
+                ["B", "The trap. Rally feels real — can retrace deeply. Sucks in the last remaining bulls.", "Media says the correction is over. Short-term momentum looks bullish. Maximum deception."],
+                ["C", "Relentless decline. No bounces hold. Margin calls. Panic. This is wave 3's mirror image.", "Capitulation. Downgrades. \"Sell everything.\" Retail exits at the bottom."],
+              ]}
+            />
+
+            <SectionH3>10.2 Volume Patterns Across the Impulse</SectionH3>
+            <VolumePatternDiagram />
+            <DataTable
+              headers={["Wave", "Typical Volume", "What It Means"]}
+              rows={[
+                ["1", "Light to moderate", "Few participants recognize the new trend; institutional accumulation hidden"],
+                ["2", "Declining", "Selling pressure dries up — bears are running out of conviction"],
+                ["3", "Highest of the impulse", "Broad participation. Confirms this is the real move. Breakaway gaps on heavy volume."],
+                ["4", "Low / drying up", "Lack of interest. Consolidation. Thin trading often produces choppy corrections."],
+                ["5", "Lower than wave 3", "This is the divergence signal. Price makes a new high on declining volume → exhaustion."],
+              ]}
+            />
+            <Callout type="rule">
+              <p className="text-sm text-[#e6e6e6]">
+                <strong>Volume divergence</strong> between waves 3 and 5 is one of the most reliable
+                confirmations that wave 5 is the final wave. When price hits a new high on lower volume,
+                start looking for exits — not entries.
+              </p>
+            </Callout>
+
+            <SectionH3>10.3 Indicators That Confirm Wave Counts</SectionH3>
+            <DataTable
+              headers={["Indicator", "Wave 3 Signal", "Wave 5 Signal", "Correction Signal"]}
+              rows={[
+                ["RSI (14)", "Makes highest reading of the impulse (often >70)", "Diverges — lower high on RSI despite higher price high", "Oversold in wave C (<30), often with positive divergence at the end"],
+                ["MACD", "Histogram at peak; zero-line crossover on W1→W3", "Histogram lower peak than W3 (classic divergence)", "Histogram returns to zero at end of correction"],
+                ["Breadth (A/D line)", "New highs across sectors; A/D line confirms", "Fewer stocks at new highs; A/D diverges", "Breadth washes out in wave C — capitulation readings"],
+                ["OBV", "Rising strongly — volume confirms price direction", "Flat or declining while price rises — distribution", "Declining in A/C, may diverge at C's end"],
+              ]}
+            />
+            <Callout type="info">
+              <p className="text-sm text-[#e6e6e6]">
+                <strong>Key principle:</strong> Indicators don&apos;t replace wave counting — they
+                <em> confirm</em> it. Use them to distinguish between wave 3 and wave 5 when the
+                structure alone is ambiguous. Multiple indicator divergences at a new price high
+                is the strongest wave 5 termination signal.
+              </p>
+            </Callout>
+          </ModuleShell>
+
+          {/* =============== MODULE 11 — PRACTICAL COUNTING =============== */}
+          <ModuleShell n={11} open={!!open[11]} toggle={toggle}>
+            <SectionH3>11.1 Step-by-Step Wave Counting Process</SectionH3>
+            <Prose>
+              <p>
+                Here is a repeatable process for counting waves on any chart. Follow these steps
+                in order every time.
+              </p>
+            </Prose>
+            <div className="my-4 space-y-3">
+              {[
+                { step: "1", title: "Zoom out — establish the big picture", desc: "Open the weekly or monthly chart. Identify the largest clear impulse or correction you can see. Which wave of the higher degree are we in? Don't start counting sub-waves until you know this." },
+                { step: "2", title: "Find the most obvious wave 3", desc: "Wave 3 is usually the easiest to spot — it's the longest, steepest move with the highest volume. Label it first. Everything else is relative to it." },
+                { step: "3", title: "Work backward from wave 3", desc: "Identify wave 1 (the first impulsive move before wave 3) and wave 2 (the correction between them). Check: does wave 2 retrace less than 100% of wave 1? Does wave 3 break beyond wave 1's end?" },
+                { step: "4", title: "Work forward from wave 3", desc: "Identify wave 4 (the correction after wave 3) and wave 5 (the final push). Check: does wave 4 stay above wave 1's territory? Is wave 3 not the shortest? Does wave 5 show divergence?" },
+                { step: "5", title: "Verify the three rules", desc: "W2 < 100% of W1? W3 not shortest? W4 above W1 peak? If any fail, your labels are wrong — try an alternate count." },
+                { step: "6", title: "Check proportionality and alternation", desc: "Do waves 2 and 4 alternate in form? Are waves proportional in time and price? Does the count have the 'right look'?" },
+                { step: "7", title: "Drop to the lower timeframe", desc: "Zoom into the current wave and count its internal structure. Confirm it has the right number of sub-waves (5 for impulse waves, 3 for corrections)." },
+                { step: "8", title: "Identify your location and plan", desc: "Now that you know where you are in the cycle, determine: Am I early enough to enter (waves 1-2 setup)? Should I hold (mid wave 3)? Should I take profits (wave 5 divergence)? Should I reverse (completed pattern)?" },
+              ].map((item) => (
+                <div key={item.step} className="flex gap-3 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+                  <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-[#185FA5]/20 text-xs font-bold text-[#5ba3e6]">
+                    {item.step}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold text-white">{item.title}</p>
+                    <p className="mt-1 text-xs leading-relaxed text-[#a0a0a0]">{item.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <SectionH3>11.2 Common Mistakes</SectionH3>
+            <Prose>
+              <p>These are the errors that cost beginners the most money and frustration:</p>
+            </Prose>
+            <DataTable
+              headers={["Mistake", "Why It Happens", "How to Fix It"]}
+              rows={[
+                ["Forcing counts to fit a bias", "You want to be long so you label every dip as wave 2, ignoring evidence of a larger correction", "Always maintain an alternate count. If you catch yourself only seeing bullish counts, deliberately draw the bearish one."],
+                ["Confusing rules and guidelines", "Treating alternation or equality as absolute rules, or ignoring actual rules like W4/W1 overlap", "Only three things are rules (Module 1.4). Everything else is a guideline — helpful but breakable."],
+                ["Counting the wrong degree", "Labeling a subminuette wave on a 5-min chart as a Primary wave top", "Start on the weekly chart and work down. Every sub-wave label must nest correctly within the higher degree."],
+                ["No alternate count", "100% committed to one count; when it fails, you freeze or panic", "Before entering any trade, write down: 'If price breaks X, the alternate count is Y and I will do Z.'"],
+                ["Over-counting on low timeframes", "Trying to label every tick on a 1-minute chart leads to noise-driven false patterns", "Don't count below the 15-minute chart unless you're scalping. Noise overwhelms structure below that."],
+                ["Ignoring volume and momentum", "Perfect-looking 5-wave structure that's actually part of a larger correction", "Always cross-check with RSI/MACD divergence and volume patterns. Structure alone isn't enough."],
+                ["Premature wave 5 calls", "Labeling wave 3 as wave 5 because it's 'gone far enough'", "Wave 3 doesn't end because it looks extended — check for momentum divergence. If RSI is still making new highs, it's probably still wave 3."],
+                ["Entering wave B traps", "Wave B of a correction rallies hard and looks like a new impulse", "Check the structure: if the rally is 3 waves (not 5), it's corrective. Volume in wave B is usually lighter than the prior impulse."],
+              ]}
+            />
+
+            <SectionH3>11.3 When to Recount</SectionH3>
+            <Callout type="warn">
+              <p className="text-sm text-amber-200">
+                Don&apos;t fall in love with your count. Recount immediately when:
+              </p>
+              <ul className="mt-2 list-inside list-disc space-y-1.5 text-sm text-[#e6e6e6]">
+                <li>Any of the three rules breaks</li>
+                <li>Price action completely deviates from your projected path with no recovery</li>
+                <li>Volume and momentum tell a fundamentally different story than your labels</li>
+                <li>Your &quot;wave 3&quot; has lower momentum than your &quot;wave 1&quot;</li>
+                <li>You need to invoke increasingly complex patterns (triple zigzags, running flats) to keep your count alive — simplicity is usually right</li>
+              </ul>
+            </Callout>
+
+            <SectionH3>11.4 The 80/20 of Wave Counting</SectionH3>
+            <Callout type="rule">
+              <p className="text-sm text-[#e6e6e6]">
+                You don&apos;t need to label every wave perfectly. Focus on the two things that matter most:
+              </p>
+              <ol className="mt-2 list-inside list-decimal space-y-2 text-sm text-[#e6e6e6]">
+                <li><strong>Is the larger trend impulsive or corrective?</strong> If impulsive, trade with it. If corrective, wait for it to end or trade the structure.</li>
+                <li><strong>Where am I in the cycle?</strong> Early (waves 1-2 = low risk entry), middle (wave 3 = hold and add), or late (wave 5 = take profits and tighten stops)?</li>
+              </ol>
+              <p className="mt-3 text-xs text-[#5ba3e6]">
+                Get these two questions right and you&apos;ll outperform most traders — even if your
+                sub-wave labels are imperfect.
+              </p>
+            </Callout>
+          </ModuleShell>
+
           {/* =============== QUICK REFERENCE CARD =============== */}
           <section id="quick-ref" className="scroll-mt-20">
             <div className="rounded-xl border border-[#185FA5]/30 bg-[#185FA5]/5 p-6">
@@ -859,7 +1196,7 @@ export default function EWLearnPage() {
                 <AlertTriangle className="h-5 w-5 text-[#5ba3e6]" />
                 Quick Reference Card
               </h2>
-              <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                 {/* Rules */}
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
                   <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#ef4444]">
@@ -908,6 +1245,32 @@ export default function EWLearnPage() {
                     <li>Does the higher degree confirm direction?</li>
                     <li>Does the lower degree trigger entry?</li>
                   </ol>
+                </div>
+
+                {/* Guidelines */}
+                <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-[#a78bfa]">
+                    Key Guidelines
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-[#c0c0c0]">
+                    <li>Alternation: W2 sharp → W4 flat (and vice versa)</li>
+                    <li>Equality: 2 of 3 impulse waves tend equal</li>
+                    <li>Proportionality: corrections match impulse in time/price</li>
+                    <li>Channeling: W5 targets upper acceleration channel line</li>
+                  </ul>
+                </div>
+
+                {/* Volume confirmation */}
+                <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+                  <p className="mb-3 text-xs font-bold uppercase tracking-wider text-cyan-400">
+                    Volume / Momentum
+                  </p>
+                  <ul className="space-y-1.5 text-sm text-[#c0c0c0]">
+                    <li>W3: highest volume + strongest RSI</li>
+                    <li>W5: lower volume + RSI/MACD divergence</li>
+                    <li>W-B trap: lighter volume than prior impulse</li>
+                    <li>W-C end: oversold RSI + positive divergence</li>
+                  </ul>
                 </div>
               </div>
             </div>
