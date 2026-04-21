@@ -181,6 +181,8 @@ export function scoreEnhanced(
       enhancedNormalized: baseWeighted / ENHANCED_MAX,
       confidenceTier: assignConfidenceTier(baseWeighted / ENHANCED_MAX),
       series: q.series,
+      athIdx: q.athIdx,
+      lowIdx: q.lowIdx,
     };
   }
 
@@ -195,10 +197,10 @@ export function scoreEnhanced(
 
   // Fibonacci score (0-4, weighted)
   let fibScore = 0;
-  if (fibAnalysis.withinGoldenZone) fibScore += 2;
+  if (fibAnalysis.withinGoldenZone) fibScore += 3; // Golden zone: strong signal
   else if (fibAnalysis.retracementDepth >= 0.236 && fibAnalysis.retracementDepth <= 0.786) fibScore += 1;
-  if (fibAnalysis.nearestLevel) fibScore += 1;
-  if (fibAnalysis.retracementDepth >= 0.382 && fibAnalysis.retracementDepth <= 0.618) fibScore += 1;
+  if (fibAnalysis.nearestLevel) fibScore += 1; // Near a specific Fib level
+  fibScore = Math.min(fibScore, 4); // Cap at 4
   const fibWeighted = fibScore * weights.fibonacci;
 
   // Volume score (0-3, weighted)
@@ -233,6 +235,8 @@ export function scoreEnhanced(
     momentumAnalysis,
     structureAnalysis,
     series: q.series,
+    athIdx: q.athIdx,
+    lowIdx: q.lowIdx,
   };
 }
 
@@ -258,9 +262,11 @@ export function scoreBatchEnhanced(
       const rsWeighted = rs * weights.relativeStrength;
 
       s.relativeStrength = Math.round(rs * 100) / 100;
-      s.enhancedScore =
-        Math.round((s.enhancedScore + rsWeighted) * 10) / 10;
-      s.enhancedNormalized = Math.min(s.enhancedScore / ENHANCED_MAX, 1);
+      s.enhancedScore = Math.min(
+        Math.round((s.enhancedScore + rsWeighted) * 10) / 10,
+        ENHANCED_MAX
+      );
+      s.enhancedNormalized = s.enhancedScore / ENHANCED_MAX;
       s.confidenceTier = assignConfidenceTier(s.enhancedNormalized);
     }
   }

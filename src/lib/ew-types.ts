@@ -107,6 +107,8 @@ export interface EnhancedScoredCandidate {
   relativeStrength?: number;
   // Series for sparkline
   series?: PriceSeries;
+  athIdx?: number;
+  lowIdx?: number;
 }
 
 export interface SavedScan {

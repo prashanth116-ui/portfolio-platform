@@ -6,8 +6,6 @@ import type { PriceSeries } from "@/lib/ew-types";
 
 interface SparklineProps {
   series: PriceSeries;
-  ath: number;
-  low: number;
   athIdx?: number;
   lowIdx?: number;
   fibLevels?: { ratio: number; price: number }[];
@@ -27,21 +25,37 @@ export function EWSparkline({
     const { close, timestamps } = series;
     const dates = timestamps.map((t) => new Date(t * 1000).toISOString().slice(0, 10));
 
-    // Find effective indices
-    const aIdx = athIdx ?? 0;
-    const lIdx = lowIdx ?? Math.floor(close.length / 2);
+    // Find effective indices — use provided or compute from data
+    let aIdx = athIdx ?? 0;
+    let lIdx = lowIdx ?? 0;
 
-    // Decline segment (ATH → Low): red
-    const declineDates = dates.slice(aIdx, lIdx + 1);
-    const declineClose = close.slice(aIdx, lIdx + 1);
+    if (athIdx == null || lowIdx == null) {
+      // Fallback: find ATH and lowest-after-ATH from close data
+      let maxVal = -Infinity;
+      for (let i = 0; i < close.length; i++) {
+        if (close[i] > maxVal) { maxVal = close[i]; aIdx = i; }
+      }
+      let minVal = Infinity;
+      for (let i = aIdx; i < close.length; i++) {
+        if (close[i] < minVal) { minVal = close[i]; lIdx = i; }
+      }
+    }
 
-    // Recovery segment (Low → Current): green
-    const recoveryDates = dates.slice(lIdx);
-    const recoveryClose = close.slice(lIdx);
+    // Clamp to valid range
+    aIdx = Math.max(0, Math.min(aIdx, close.length - 1));
+    lIdx = Math.max(aIdx, Math.min(lIdx, close.length - 1));
 
     // Pre-ATH segment: gray
     const preDates = dates.slice(0, aIdx + 1);
     const preClose = close.slice(0, aIdx + 1);
+
+    // Decline segment (ATH -> Low): red
+    const declineDates = dates.slice(aIdx, lIdx + 1);
+    const declineClose = close.slice(aIdx, lIdx + 1);
+
+    // Recovery segment (Low -> Current): green
+    const recoveryDates = dates.slice(lIdx);
+    const recoveryClose = close.slice(lIdx);
 
     const traces: Plotly.Data[] = [];
 
@@ -57,27 +71,31 @@ export function EWSparkline({
       });
     }
 
-    traces.push({
-      x: declineDates,
-      y: declineClose,
-      type: "scatter",
-      mode: "lines",
-      line: { color: "#ef4444", width: 1.5 },
-      hoverinfo: "skip",
-      showlegend: false,
-    });
+    if (declineDates.length > 1) {
+      traces.push({
+        x: declineDates,
+        y: declineClose,
+        type: "scatter",
+        mode: "lines",
+        line: { color: "#ef4444", width: 1.5 },
+        hoverinfo: "skip",
+        showlegend: false,
+      });
+    }
 
-    traces.push({
-      x: recoveryDates,
-      y: recoveryClose,
-      type: "scatter",
-      mode: "lines",
-      line: { color: "#22c55e", width: 1.5 },
-      hoverinfo: "skip",
-      showlegend: false,
-    });
+    if (recoveryDates.length > 1) {
+      traces.push({
+        x: recoveryDates,
+        y: recoveryClose,
+        type: "scatter",
+        mode: "lines",
+        line: { color: "#22c55e", width: 1.5 },
+        hoverinfo: "skip",
+        showlegend: false,
+      });
+    }
 
-    // Fib level lines
+    // Fib level lines (golden zone only)
     if (fibLevels) {
       for (const fib of fibLevels) {
         if (fib.ratio === 0.382 || fib.ratio === 0.5 || fib.ratio === 0.618) {

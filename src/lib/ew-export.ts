@@ -27,9 +27,9 @@ export async function exportToExcel(
     Ticker: c.ticker,
     Name: c.name,
     ATH: c.ath.toFixed(2),
-    "ATH Year": c.athYear.toFixed(2),
+    "ATH Year": c.athYear,
     Low: c.low.toFixed(2),
-    "Low Year": c.lowYear.toFixed(2),
+    "Low Year": c.lowYear,
     Current: c.current.toFixed(2),
   }));
   const ws2 = XLSX.utils.json_to_sheet(priceData);
@@ -81,9 +81,9 @@ export function exportToCsv(
       c.monthsDecline.toFixed(1),
       `${c.recoveryPct.toFixed(1)}%`,
       c.ath.toFixed(2),
-      c.athYear.toFixed(2),
+      c.athYear,
       c.low.toFixed(2),
-      c.lowYear.toFixed(2),
+      c.lowYear,
       c.current.toFixed(2),
       `"${labels[c.ticker] || "\u2014"}"`,
       c.passed ? "Yes" : "No",
@@ -100,7 +100,7 @@ export function exportToCsv(
   URL.revokeObjectURL(url);
 }
 
-// ── Enhanced export functions (V2) ─���
+// ── Enhanced export functions (V2) ──
 
 export async function exportEnhancedToExcel(
   candidates: EnhancedScoredCandidate[],

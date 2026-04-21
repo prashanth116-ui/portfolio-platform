@@ -91,11 +91,7 @@ export function classifyStructure(
         break;
       }
     }
-    if (alternating) {
-      classification = "impulsive";
-    } else if (swingCount >= 5) {
-      classification = "impulsive"; // Still enough pivots
-    }
+    classification = alternating ? "impulsive" : "corrective";
   } else if (swingCount >= 3) {
     classification = "corrective";
   }

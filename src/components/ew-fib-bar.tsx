@@ -14,8 +14,8 @@ const FIB_TICKS = [
   { ratio: 0.786, label: "78.6" },
 ];
 
-export function EWFibBar({ retracementDepth, width = 180, height = 24 }: FibBarProps) {
-  const barY = 10;
+export function EWFibBar({ retracementDepth, width = 180, height = 28 }: FibBarProps) {
+  const barY = 8;
   const barH = 4;
   const padding = 4;
   const barW = width - padding * 2;

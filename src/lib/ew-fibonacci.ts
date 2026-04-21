@@ -56,7 +56,8 @@ export function analyzeFibonacci(
 
   // Depth label
   let depthLabel: string;
-  if (retracementDepth < 0.236) depthLabel = "Shallow (<23.6%)";
+  if (retracementDepth < 0) depthLabel = "Below low (new low)";
+  else if (retracementDepth < 0.236) depthLabel = "Shallow (<23.6%)";
   else if (retracementDepth < 0.382) depthLabel = "Light (23.6-38.2%)";
   else if (retracementDepth < 0.5) depthLabel = "Golden low (38.2-50%)";
   else if (retracementDepth < 0.618) depthLabel = "Golden high (50-61.8%)";

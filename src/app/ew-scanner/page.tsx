@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   Activity,
   Search,
@@ -50,7 +50,7 @@ const BATCH_SIZE = 10;
 const BATCH_DELAY = 300;
 
 type SortKey = "score" | "decline" | "recovery" | "sector" | "confidence";
-type GroupKey = "none" | "sector" | "confidence" | "wavePosition";
+type GroupKey = "none" | "sector" | "confidence";
 
 export default function EWScannerPage() {
   const [htf, setHtf] = useState<string>("Monthly");
@@ -95,11 +95,9 @@ export default function EWScannerPage() {
     setMinRecovery(cfg.defaults.minRecovery);
   }, []);
 
-  const passed = results.filter((r) => r.passed);
-  const failed = results.filter((r) => !r.passed);
-
+  const passed = useMemo(() => results.filter((r) => r.passed), [results]);
   // Apply mode filters to passing candidates
-  const modeFiltered = applyModeFilters(passed, mode);
+  const modeFiltered = useMemo(() => applyModeFilters(passed, mode), [passed, mode]);
 
   // Sort
   const sorted = [...modeFiltered].sort((a, b) => {
@@ -363,14 +361,24 @@ export default function EWScannerPage() {
               </p>
             </div>
           </div>
-          <Link
-            href="/ew-scanner/learn"
-            className="flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
-          >
-            <BookOpen className="h-4 w-4" />
-            <span className="hidden sm:inline">Learn EW Theory</span>
-            <span className="sm:hidden">Learn</span>
-          </Link>
+          <div className="flex gap-2">
+            <Link
+              href="/ew-scanner/guide"
+              className="flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
+            >
+              <Search className="h-4 w-4" />
+              <span className="hidden sm:inline">How to Use</span>
+              <span className="sm:hidden">Guide</span>
+            </Link>
+            <Link
+              href="/ew-scanner/learn"
+              className="flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
+            >
+              <BookOpen className="h-4 w-4" />
+              <span className="hidden sm:inline">Learn EW Theory</span>
+              <span className="sm:hidden">Learn</span>
+            </Link>
+          </div>
         </div>
       </section>
 
@@ -752,7 +760,6 @@ export default function EWScannerPage() {
                     idx={idx}
                     labels={labels}
                     labeling={labeling}
-                    mode={mode}
                     minDecline={minDecline}
                     minMonths={minMonths}
                     minRecovery={minRecovery}
@@ -770,24 +777,27 @@ export default function EWScannerPage() {
           ))}
 
           {/* Filtered out (collapsed) */}
-          {failed.length > 0 && (
+          {results.length > modeFiltered.length && (
             <details className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a]">
               <summary className="cursor-pointer px-4 py-3 text-sm text-[#a0a0a0] hover:text-white">
                 {results.length - modeFiltered.length} tickers filtered out
               </summary>
               <div className="border-t border-[#2a2a2a] px-4 py-3">
                 <div className="flex flex-wrap gap-2">
-                  {results
-                    .filter((c) => !modeFiltered.includes(c))
-                    .map((c) => (
-                      <span
-                        key={c.ticker}
-                        className="rounded bg-[#262626] px-2 py-0.5 text-xs text-[#666]"
-                        title={`Score: ${c.enhancedScore.toFixed(1)}/${c.enhancedMax} | Decline: ${c.declinePct.toFixed(1)}% | Recovery: ${c.recoveryPct.toFixed(1)}%`}
-                      >
-                        {c.ticker}
-                      </span>
-                    ))}
+                  {(() => {
+                    const passedSet = new Set(modeFiltered.map((c) => c.ticker));
+                    return results
+                      .filter((c) => !passedSet.has(c.ticker))
+                      .map((c) => (
+                        <span
+                          key={c.ticker}
+                          className="rounded bg-[#262626] px-2 py-0.5 text-xs text-[#666]"
+                          title={`Score: ${c.enhancedScore.toFixed(1)}/${c.enhancedMax} | Decline: ${c.declinePct.toFixed(1)}% | Recovery: ${c.recoveryPct.toFixed(1)}%`}
+                        >
+                          {c.ticker}
+                        </span>
+                      ));
+                  })()}
                 </div>
               </div>
             </details>
@@ -933,7 +943,6 @@ function CandidateCard({
   idx: number;
   labels: Record<string, string>;
   labeling: boolean;
-  mode: ScannerMode;
   minDecline: number;
   minMonths: number;
   minRecovery: number;
@@ -1035,8 +1044,8 @@ function CandidateCard({
         <div className="flex justify-center px-4 py-1">
           <EWSparkline
             series={c.series}
-            ath={c.ath}
-            low={c.low}
+            athIdx={c.athIdx}
+            lowIdx={c.lowIdx}
             fibLevels={c.fibAnalysis?.levels}
             width={200}
             height={50}
@@ -1157,9 +1166,6 @@ function groupCandidates(
         break;
       case "confidence":
         key = c.confidenceTier;
-        break;
-      case "wavePosition":
-        key = "Unknown";
         break;
       default:
         key = "All";

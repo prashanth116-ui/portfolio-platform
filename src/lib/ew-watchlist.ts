@@ -2,6 +2,10 @@ import type { SavedScan, EnhancedScoredCandidate, ScannerMode } from "./ew-types
 
 const STORAGE_KEY = "ew-scanner-saved-scans";
 
+function isClient(): boolean {
+  return typeof window !== "undefined";
+}
+
 export function saveScan(
   name: string,
   mode: ScannerMode,
@@ -9,7 +13,9 @@ export function saveScan(
   filters: { minDecline: number; minMonths: number; minRecovery: number },
   candidates: EnhancedScoredCandidate[],
   labels: Record<string, string>
-): SavedScan {
+): SavedScan | null {
+  if (!isClient()) return null;
+
   // Strip series data to keep storage small
   const stripped = candidates.map(({ series, ...rest }) => rest);
 
@@ -35,6 +41,7 @@ export function saveScan(
 }
 
 export function loadScans(): SavedScan[] {
+  if (!isClient()) return [];
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return [];
@@ -45,6 +52,7 @@ export function loadScans(): SavedScan[] {
 }
 
 export function deleteScan(id: string): void {
+  if (!isClient()) return;
   const scans = loadScans().filter((s) => s.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(scans));
 }

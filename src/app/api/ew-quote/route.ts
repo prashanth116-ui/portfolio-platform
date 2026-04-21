@@ -78,22 +78,33 @@ export async function GET(request: NextRequest) {
     };
 
     if (detail) {
-      // Build clean arrays, replacing nulls with previous valid value
+      // Build clean arrays, skipping null bars.
+      // Map raw athIdx/lowIdx to clean array positions.
       const cleanOpen: number[] = [];
       const cleanHigh: number[] = [];
       const cleanLow: number[] = [];
       const cleanClose: number[] = [];
       const cleanVolume: number[] = [];
       const cleanTimestamps: number[] = [];
+      const rawToClean: Map<number, number> = new Map();
 
       for (let i = 0; i < timestamps.length; i++) {
         if (closes[i] == null) continue;
+        rawToClean.set(i, cleanClose.length);
         cleanTimestamps.push(timestamps[i]);
         cleanOpen.push(opens[i] ?? closes[i]!);
         cleanHigh.push(highs[i] ?? closes[i]!);
         cleanLow.push(lows[i] ?? closes[i]!);
         cleanClose.push(closes[i]!);
         cleanVolume.push(volumes[i] ?? 0);
+      }
+
+      // Map raw indices to clean array positions (fallback to nearest valid)
+      let cleanAthIdx = rawToClean.get(athIdx) ?? 0;
+      let cleanLowIdx = rawToClean.get(lowIdx) ?? cleanAthIdx;
+      // Ensure low is after ATH in clean array
+      if (cleanLowIdx <= cleanAthIdx && cleanClose.length > 0) {
+        cleanLowIdx = Math.min(cleanAthIdx + 1, cleanClose.length - 1);
       }
 
       baseResponse.series = {
@@ -104,8 +115,8 @@ export async function GET(request: NextRequest) {
         close: cleanClose,
         volume: cleanVolume,
       };
-      baseResponse.athIdx = athIdx;
-      baseResponse.lowIdx = lowIdx;
+      baseResponse.athIdx = cleanAthIdx;
+      baseResponse.lowIdx = cleanLowIdx;
     }
 
     return NextResponse.json(baseResponse);

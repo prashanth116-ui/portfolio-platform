@@ -4,7 +4,7 @@ export interface TickerInfo {
   sector?: string;
 }
 
-export const UNIVERSES: Record<string, TickerInfo[]> = {
+const UNIVERSES_DEF = {
   SP500: [
     { symbol: "AAPL", name: "Apple", sector: "Technology" },
     { symbol: "MSFT", name: "Microsoft", sector: "Technology" },
@@ -122,8 +122,7 @@ export const UNIVERSES: Record<string, TickerInfo[]> = {
     { symbol: "ILMN", name: "Illumina", sector: "Healthcare" },
     { symbol: "DXCM", name: "DexCom", sector: "Healthcare" },
     { symbol: "ALGN", name: "Align Technology", sector: "Healthcare" },
-    { symbol: "SGEN", name: "Seagen", sector: "Healthcare" },
-    { symbol: "BMRN", name: "BioMarin", sector: "Healthcare" },
+{ symbol: "BMRN", name: "BioMarin", sector: "Healthcare" },
     { symbol: "EXAS", name: "Exact Sciences", sector: "Healthcare" },
   ],
   Energy: [
@@ -204,5 +203,6 @@ export const UNIVERSES: Record<string, TickerInfo[]> = {
   ],
 };
 
-export type UniverseKey = keyof typeof UNIVERSES;
+export const UNIVERSES: Record<string, TickerInfo[]> = UNIVERSES_DEF;
+export type UniverseKey = keyof typeof UNIVERSES_DEF;
 export const UNIVERSE_KEYS = Object.keys(UNIVERSES) as UniverseKey[];

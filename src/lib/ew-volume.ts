@@ -19,8 +19,8 @@ export function analyzeVolume(
       ? declineVols.reduce((s, v) => s + v, 0) / declineVols.length
       : 0;
 
-  // Average volume during recovery (lowIdx to end)
-  const recoveryVols = volume.slice(lowIdx).filter((v) => v > 0);
+  // Average volume during recovery (after low bar to end)
+  const recoveryVols = volume.slice(lowIdx + 1).filter((v) => v > 0);
   const recoveryAvgVol =
     recoveryVols.length > 0
       ? recoveryVols.reduce((s, v) => s + v, 0) / recoveryVols.length
