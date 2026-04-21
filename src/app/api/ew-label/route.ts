@@ -45,24 +45,29 @@ TICKER: [one-line EW position]
 Tickers:
 ${tickerLines}`;
 
-  const client = new Anthropic();
-  const msg = await client.messages.create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 1024,
-    messages: [{ role: "user", content: prompt }],
-  });
+  try {
+    const client = new Anthropic();
+    const msg = await client.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 1024,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-  const text =
-    msg.content[0].type === "text" ? msg.content[0].text : "";
+    const text =
+      msg.content[0].type === "text" ? msg.content[0].text : "";
 
-  // Parse response into ticker -> label map
-  const labels: Record<string, string> = {};
-  for (const line of text.split("\n")) {
-    const match = line.match(/^([A-Z.]+):\s*(.+)$/);
-    if (match) {
-      labels[match[1]] = match[2].trim().slice(0, 60);
+    // Parse response into ticker -> label map
+    const labels: Record<string, string> = {};
+    for (const line of text.split("\n")) {
+      const match = line.match(/^([A-Z.]+):\s*(.+)$/);
+      if (match) {
+        labels[match[1]] = match[2].trim().slice(0, 60);
+      }
     }
-  }
 
-  return NextResponse.json({ labels });
+    return NextResponse.json({ labels });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ labels: {}, error: message });
+  }
 }

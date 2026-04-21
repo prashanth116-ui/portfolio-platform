@@ -50,15 +50,20 @@ Analyze:
 
 Be specific with price levels. Use standard EW notation (Wave 1-5, A-B-C).`;
 
-  const client = new Anthropic();
-  const msg = await client.messages.create({
-    model: "claude-sonnet-4-5-20250929",
-    max_tokens: 600,
-    messages: [{ role: "user", content: prompt }],
-  });
+  try {
+    const client = new Anthropic();
+    const msg = await client.messages.create({
+      model: "claude-sonnet-4-5-20250929",
+      max_tokens: 600,
+      messages: [{ role: "user", content: prompt }],
+    });
 
-  const text =
-    msg.content[0].type === "text" ? msg.content[0].text : "";
+    const text =
+      msg.content[0].type === "text" ? msg.content[0].text : "";
 
-  return NextResponse.json({ analysis: text });
+    return NextResponse.json({ analysis: text });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Unknown error";
+    return NextResponse.json({ analysis: `Error: ${message}` });
+  }
 }
