@@ -26,6 +26,15 @@ interface DeepInput {
   swingCount?: number;
   momentumScore?: number;
   scannerMode?: string;
+  // V3 wave count fields
+  waveCountValid?: boolean;
+  waveCountScore?: number;
+  waveCountPosition?: string;
+  waveCountViolations?: string[];
+  waveLabels?: string;
+  alternatePosition?: string;
+  fibExtensions?: { ratio: number; price: number; label: string }[];
+  confluenceZones?: { price: number; levels: string[] }[];
 }
 
 export async function POST(request: NextRequest) {
@@ -59,6 +68,31 @@ export async function POST(request: NextRequest) {
   if (data.momentumScore != null) analysisContext += `\n- Momentum score: ${data.momentumScore.toFixed(2)} (-1 bearish to +1 bullish)`;
   if (data.scannerMode) analysisContext += `\n- Scanner mode: ${data.scannerMode}`;
 
+  // V3: Wave count context
+  let waveCountContext = "";
+  if (data.waveCountPosition) {
+    waveCountContext += `\nAlgorithmic wave counting:`;
+    waveCountContext += `\n- Position: ${data.waveCountPosition}`;
+    waveCountContext += `\n- Valid: ${data.waveCountValid ? "yes" : "no"} (score: ${data.waveCountScore ?? 0}/100)`;
+    if (data.waveLabels) waveCountContext += `\n- Wave labels: ${data.waveLabels}`;
+    if (data.waveCountViolations?.length) waveCountContext += `\n- Rule violations: ${data.waveCountViolations.join(", ")}`;
+    if (data.alternatePosition) waveCountContext += `\n- Alternate count: ${data.alternatePosition}`;
+  }
+
+  let extensionContext = "";
+  if (data.fibExtensions?.length) {
+    extensionContext += `\nFibonacci extensions (Wave 3/5 targets):`;
+    for (const ext of data.fibExtensions) {
+      extensionContext += `\n- ${ext.label}: $${ext.price.toFixed(2)}`;
+    }
+  }
+  if (data.confluenceZones?.length) {
+    extensionContext += `\nConfluence zones (multiple Fib levels cluster):`;
+    for (const z of data.confluenceZones) {
+      extensionContext += `\n- $${z.price.toFixed(2)}: ${z.levels.join(" + ")}`;
+    }
+  }
+
   const prompt = `You are an expert Elliott Wave analyst. Provide a deep analysis for ${data.ticker} (${data.name}).
 
 Price data:
@@ -68,7 +102,7 @@ Price data:
 - Decline: ${data.declinePct.toFixed(1)}% over ${data.durationMonths.toFixed(0)} months
 - Recovery: ${data.recoveryPct.toFixed(1)}% from low
 - Mechanical score: ${data.score}/20
-${data.label ? `- Quick label: ${data.label}` : ""}${seriesContext}${analysisContext ? `\nTechnical analysis:${analysisContext}` : ""}
+${data.label ? `- Quick label: ${data.label}` : ""}${seriesContext}${analysisContext ? `\nTechnical analysis:${analysisContext}` : ""}${waveCountContext}${extensionContext}
 
 Timeframes: ${data.htf} (primary) / ${data.ltf} (sub-waves)
 

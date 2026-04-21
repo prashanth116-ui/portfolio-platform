@@ -1,6 +1,7 @@
 import type { SavedScan, EnhancedScoredCandidate, ScannerMode } from "./ew-types";
 
 const STORAGE_KEY = "ew-scanner-saved-scans";
+const CUSTOM_UNIVERSE_KEY = "ew-scanner-custom-universes";
 
 function isClient(): boolean {
   return typeof window !== "undefined";
@@ -55,4 +56,49 @@ export function deleteScan(id: string): void {
   if (!isClient()) return;
   const scans = loadScans().filter((s) => s.id !== id);
   localStorage.setItem(STORAGE_KEY, JSON.stringify(scans));
+}
+
+// ── V3: Custom Universes ──
+
+export interface CustomUniverse {
+  id: string;
+  name: string;
+  tickers: string[];
+  createdAt: string;
+}
+
+export function saveCustomUniverse(name: string, tickers: string[]): CustomUniverse | null {
+  if (!isClient()) return null;
+
+  const universe: CustomUniverse = {
+    id: `universe_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+    name,
+    tickers,
+    createdAt: new Date().toISOString(),
+  };
+
+  const existing = loadCustomUniverses();
+  existing.push(universe);
+  // Keep max 10 custom universes
+  const trimmed = existing.slice(-10);
+  localStorage.setItem(CUSTOM_UNIVERSE_KEY, JSON.stringify(trimmed));
+
+  return universe;
+}
+
+export function loadCustomUniverses(): CustomUniverse[] {
+  if (!isClient()) return [];
+  try {
+    const raw = localStorage.getItem(CUSTOM_UNIVERSE_KEY);
+    if (!raw) return [];
+    return JSON.parse(raw) as CustomUniverse[];
+  } catch {
+    return [];
+  }
+}
+
+export function deleteCustomUniverse(id: string): void {
+  if (!isClient()) return;
+  const universes = loadCustomUniverses().filter((u) => u.id !== id);
+  localStorage.setItem(CUSTOM_UNIVERSE_KEY, JSON.stringify(universes));
 }

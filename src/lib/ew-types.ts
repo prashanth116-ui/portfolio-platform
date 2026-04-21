@@ -1,4 +1,4 @@
-/** Central types for EW Scanner V2 */
+/** Central types for EW Scanner V3 */
 
 export interface PriceSeries {
   timestamps: number[];
@@ -40,6 +40,8 @@ export interface FibAnalysis {
   withinGoldenZone: boolean;
   retracementDepth: number;
   depthLabel: string;
+  extensions?: FibExtension[];
+  confluenceZones?: ConfluenceZone[];
 }
 
 export interface VolumeAnalysis {
@@ -60,6 +62,48 @@ export interface StructureAnalysis {
   swingCount: number;
   classification: "impulsive" | "corrective" | "unclear";
   swings: SwingPoint[];
+}
+
+// ── V3: Algorithmic Wave Counting Types ──
+
+export type WaveLabel = "1" | "2" | "3" | "4" | "5" | "A" | "B" | "C";
+export type WaveDegree = "primary" | "intermediate" | "minor";
+
+export interface WavePoint extends SwingPoint {
+  label: WaveLabel;
+  degree: WaveDegree;
+  confidence: number; // 0-1
+}
+
+export interface WaveCount {
+  waves: WavePoint[];
+  degree: WaveDegree;
+  isValid: boolean;
+  violations: string[];
+  score: number; // 0-100 quality score
+  position: string; // e.g. "In Wave 4 correction"
+  alternateCount?: WaveCount;
+}
+
+export interface FibExtension {
+  ratio: number;
+  price: number;
+  label: string;
+}
+
+export interface ConfluenceZone {
+  price: number;
+  levels: string[];
+}
+
+// ── V3: Multi-Timeframe Types ──
+
+export interface MTFConfirmation {
+  alignment: "confirmed" | "conflicting" | "unclear";
+  alignmentScore: number; // 0-1
+  htfPosition: string;
+  ltfPosition: string;
+  details: string;
 }
 
 export type ScannerMode = "wave2" | "wave4" | "wave5" | "breakout";
@@ -105,6 +149,9 @@ export interface EnhancedScoredCandidate {
   momentumAnalysis?: MomentumAnalysis;
   structureAnalysis?: StructureAnalysis;
   relativeStrength?: number;
+  // V3: Wave counting
+  waveCount?: WaveCount;
+  mtfConfirmation?: MTFConfirmation;
   // Series for sparkline
   series?: PriceSeries;
   athIdx?: number;

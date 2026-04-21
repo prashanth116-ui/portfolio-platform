@@ -7,8 +7,10 @@ import type {
   StructureAnalysis,
   ConfidenceTier,
   ScannerMode,
+  WaveCount,
 } from "./ew-types";
-import { analyzeFibonacci } from "./ew-fibonacci";
+import { countWaves } from "./ew-wave-counter";
+import { analyzeFibonacciEnhanced } from "./ew-fibonacci";
 import { analyzeVolume } from "./ew-volume";
 import { analyzeMomentum } from "./ew-momentum";
 import { classifyStructure } from "./ew-swing";
@@ -128,6 +130,7 @@ interface ModeWeights {
   volume: number;
   structure: number;
   relativeStrength: number;
+  waveCount: number;
 }
 
 const MODE_WEIGHTS: Record<ScannerMode, ModeWeights> = {
@@ -137,6 +140,7 @@ const MODE_WEIGHTS: Record<ScannerMode, ModeWeights> = {
     volume: 1.0,
     structure: 1.0,
     relativeStrength: 1.0,
+    waveCount: 1.0,
   },
   wave4: {
     base: 0.5,
@@ -144,6 +148,7 @@ const MODE_WEIGHTS: Record<ScannerMode, ModeWeights> = {
     volume: 1.0,
     structure: 0.5,
     relativeStrength: 1.5,
+    waveCount: 1.0,
   },
   wave5: {
     base: 0.5,
@@ -151,6 +156,7 @@ const MODE_WEIGHTS: Record<ScannerMode, ModeWeights> = {
     volume: 1.5,
     structure: 1.0,
     relativeStrength: 2.0,
+    waveCount: 1.0,
   },
   breakout: {
     base: 0.5,
@@ -158,10 +164,11 @@ const MODE_WEIGHTS: Record<ScannerMode, ModeWeights> = {
     volume: 2.0,
     structure: 1.0,
     relativeStrength: 2.0,
+    waveCount: 0.5,
   },
 };
 
-const ENHANCED_MAX = 20;
+const ENHANCED_MAX = 25; // Was 20, now includes wave count quality (0-5)
 
 export function scoreEnhanced(
   q: EnrichedQuoteInput,
@@ -187,10 +194,20 @@ export function scoreEnhanced(
   }
 
   // Run analyses
-  const fibAnalysis = analyzeFibonacci(q.ath, q.low, q.current);
   const volumeAnalysis = analyzeVolume(q.series, q.athIdx, q.lowIdx);
   const momentumAnalysis = analyzeMomentum(q.series, q.athIdx, q.lowIdx);
   const structureAnalysis = classifyStructure(q.series, q.athIdx, q.lowIdx);
+
+  // V3: Run wave counter
+  let waveCount: WaveCount | null = null;
+  try {
+    waveCount = countWaves(q.series, q.athIdx, q.lowIdx);
+  } catch {
+    // Wave counting is non-critical
+  }
+
+  // V3: Enhanced Fibonacci with extensions from wave count
+  const fibAnalysis = analyzeFibonacciEnhanced(q.ath, q.low, q.current, waveCount);
 
   // Base score (0-7, weighted)
   const baseWeighted = (base.score / MAX_SCORE) * 7 * weights.base;
@@ -217,10 +234,21 @@ export function scoreEnhanced(
   else if (structureAnalysis.swingCount >= 2) structScore += 1;
   const structWeighted = structScore * weights.structure;
 
+  // V3: Wave count quality score (0-5, weighted)
+  let waveCountScore = 0;
+  if (waveCount) {
+    if (waveCount.isValid && waveCount.score >= 70) waveCountScore = 5;
+    else if (waveCount.isValid && waveCount.score >= 50) waveCountScore = 4;
+    else if (waveCount.isValid) waveCountScore = 3;
+    else if (waveCount.score >= 50) waveCountScore = 2;
+    else if (waveCount.score > 0) waveCountScore = 1;
+  }
+  const waveCountWeighted = waveCountScore * weights.waveCount;
+
   // Relative strength placeholder (set in batch processing: 0-3)
   const rsWeighted = 0;
 
-  const totalRaw = baseWeighted + fibWeighted + volWeighted + structWeighted + rsWeighted;
+  const totalRaw = baseWeighted + fibWeighted + volWeighted + structWeighted + waveCountWeighted + rsWeighted;
   const enhancedNormalized = Math.min(totalRaw / ENHANCED_MAX, 1);
 
   return {
@@ -234,6 +262,7 @@ export function scoreEnhanced(
     volumeAnalysis,
     momentumAnalysis,
     structureAnalysis,
+    waveCount: waveCount ?? undefined,
     series: q.series,
     athIdx: q.athIdx,
     lowIdx: q.lowIdx,

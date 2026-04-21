@@ -1,4 +1,4 @@
-import type { FibLevel, FibAnalysis } from "./ew-types";
+import type { FibLevel, FibAnalysis, FibExtension, ConfluenceZone, WaveCount } from "./ew-types";
 
 const FIB_RATIOS = [
   { ratio: 0.236, label: "23.6%" },
@@ -85,4 +85,125 @@ export function getFibZoneLabel(depth: number): string {
   if (depth < 0.786) return "61.8-78.6%";
   if (depth < 1.0) return "78.6-100%";
   return ">100%";
+}
+
+// ── V3: Fibonacci Extensions ──
+
+const FIB_EXTENSION_RATIOS = [
+  { ratio: 1.0, label: "100%" },
+  { ratio: 1.272, label: "127.2%" },
+  { ratio: 1.618, label: "161.8%" },
+  { ratio: 2.0, label: "200%" },
+  { ratio: 2.618, label: "261.8%" },
+  { ratio: 4.236, label: "423.6%" },
+];
+
+/**
+ * Calculate Fibonacci extension targets from a 3-point pattern (Wave 1 start, Wave 1 end, Wave 2 end).
+ * Projects where Wave 3 or Wave 5 might reach.
+ */
+export function calculateFibExtensions(
+  wave1Start: number,
+  wave1End: number,
+  wave2End: number
+): FibExtension[] {
+  const wave1Range = wave1End - wave1Start;
+  if (Math.abs(wave1Range) < 0.01) return [];
+
+  return FIB_EXTENSION_RATIOS.map(({ ratio, label }) => ({
+    ratio,
+    price: Math.round((wave2End + wave1Range * ratio) * 100) / 100,
+    label,
+  }));
+}
+
+/**
+ * Find confluence zones where multiple Fibonacci levels cluster within 2% of each other.
+ */
+export function findFibConfluence(
+  extensions: FibExtension[],
+  retracements: FibLevel[]
+): ConfluenceZone[] {
+  const allLevels: { price: number; label: string }[] = [
+    ...extensions.map((e) => ({ price: e.price, label: `Ext ${e.label}` })),
+    ...retracements.map((r) => ({ price: r.price, label: `Ret ${r.label}` })),
+  ];
+
+  if (allLevels.length < 2) return [];
+
+  // Sort by price
+  allLevels.sort((a, b) => a.price - b.price);
+
+  const zones: ConfluenceZone[] = [];
+  let i = 0;
+
+  while (i < allLevels.length) {
+    const clusterLevels: string[] = [allLevels[i].label];
+    const basePrice = allLevels[i].price;
+    let priceSum = basePrice;
+    let j = i + 1;
+
+    // Group levels within 2% of the base price
+    while (j < allLevels.length) {
+      const pctDiff = Math.abs(allLevels[j].price - basePrice) / Math.abs(basePrice || 1);
+      if (pctDiff <= 0.02) {
+        clusterLevels.push(allLevels[j].label);
+        priceSum += allLevels[j].price;
+        j++;
+      } else {
+        break;
+      }
+    }
+
+    // Only record as confluence if 2+ levels cluster
+    if (clusterLevels.length >= 2) {
+      zones.push({
+        price: Math.round((priceSum / clusterLevels.length) * 100) / 100,
+        levels: clusterLevels,
+      });
+    }
+
+    i = j;
+  }
+
+  return zones;
+}
+
+/**
+ * Enhanced Fibonacci analysis that includes extensions from wave count data.
+ */
+export function analyzeFibonacciEnhanced(
+  ath: number,
+  low: number,
+  current: number,
+  waveCount?: WaveCount | null
+): FibAnalysis {
+  const base = analyzeFibonacci(ath, low, current);
+
+  if (!waveCount || waveCount.waves.length < 2) return base;
+
+  // Calculate extensions from the wave count
+  const waves = waveCount.waves;
+  let extensions: FibExtension[] = [];
+  let confluenceZones: ConfluenceZone[] = [];
+
+  // If we have at least waves 1 and 2, project Wave 3 targets
+  if (waves.length >= 2) {
+    const w1Label = waves.find((w) => w.label === "1");
+    const w2Label = waves.find((w) => w.label === "2");
+
+    if (w1Label && w2Label) {
+      // For impulse: Wave 1 start is before Wave 1 end
+      // Use ATH or low as Wave 1 start depending on direction
+      const w1Start = w1Label.price > w2Label.price ? low : ath;
+      extensions = calculateFibExtensions(w1Start, w1Label.price, w2Label.price);
+      confluenceZones = findFibConfluence(extensions, base.levels);
+    }
+  }
+
+  return {
+    ...base,
+    extensions: extensions.length > 0 ? extensions : undefined,
+    confluenceZones: confluenceZones.length > 0 ? confluenceZones : undefined,
+  };
 }

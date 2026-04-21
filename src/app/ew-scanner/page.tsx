@@ -38,10 +38,13 @@ import type {
   SavedScan,
 } from "@/lib/ew-types";
 import { SCANNER_MODES, getModeConfig, applyModeFilters } from "@/lib/ew-scanner-modes";
-import { saveScan, loadScans, deleteScan } from "@/lib/ew-watchlist";
+import { saveScan, loadScans, deleteScan, loadCustomUniverses } from "@/lib/ew-watchlist";
+import { confirmMultiTimeframe } from "@/lib/ew-wave-counter";
 import { EWSparkline } from "@/components/ew-sparkline";
 import { EWFibBar } from "@/components/ew-fib-bar";
 import { EWSectorHeatmap } from "@/components/ew-sector-heatmap";
+import { EWDeepChart } from "@/components/ew-deep-chart";
+import { EWUniverseBuilder } from "@/components/ew-universe-builder";
 
 const HTF_OPTIONS = ["Monthly", "Weekly"] as const;
 const LTF_OPTIONS = ["Daily", "4H", "1H"] as const;
@@ -55,7 +58,7 @@ type GroupKey = "none" | "sector" | "confidence";
 export default function EWScannerPage() {
   const [htf, setHtf] = useState<string>("Monthly");
   const [ltf, setLtf] = useState<string>("Daily");
-  const [universe, setUniverse] = useState<UniverseKey>("SP500");
+  const [universe, setUniverse] = useState<string>("SP500");
   const [mode, setMode] = useState<ScannerMode>("wave2");
 
   // Default sliders from mode config
@@ -71,19 +74,24 @@ export default function EWScannerPage() {
   const [labeling, setLabeling] = useState(false);
 
   const [deepTicker, setDeepTicker] = useState<string | null>(null);
+  const [deepCandidate, setDeepCandidate] = useState<EnhancedScoredCandidate | null>(null);
   const [deepAnalysis, setDeepAnalysis] = useState<string>("");
   const [deepStructured, setDeepStructured] = useState<DeepAnalysisResult | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
+  const [deepTab, setDeepTab] = useState<"analysis" | "chart">("analysis");
 
   const [sortBy, setSortBy] = useState<SortKey>("score");
   const [groupBy, setGroupBy] = useState<GroupKey>("none");
 
   const [savedScans, setSavedScans] = useState<SavedScan[]>([]);
   const [showSaved, setShowSaved] = useState(false);
+  const [showUniverseBuilder, setShowUniverseBuilder] = useState(false);
+  const [customUniverseKeys, setCustomUniverseKeys] = useState<string[]>([]);
 
-  // Load saved scans on mount
+  // Load saved scans and custom universes on mount
   useEffect(() => {
     setSavedScans(loadScans());
+    setCustomUniverseKeys(loadCustomUniverses().map((u) => `custom:${u.id}`));
   }, []);
 
   // Update slider defaults when mode changes
@@ -123,7 +131,21 @@ export default function EWScannerPage() {
     setResults([]);
     setLabels({});
 
-    const tickers = UNIVERSES[universe];
+    // Resolve tickers from preset or custom universe
+    let tickers: { symbol: string; name: string; sector?: string }[];
+    if (universe.startsWith("custom:")) {
+      const customId = universe.replace("custom:", "");
+      const customs = loadCustomUniverses();
+      const custom = customs.find((u) => u.id === customId);
+      if (!custom) {
+        setProgress("Custom universe not found.");
+        setScanning(false);
+        return;
+      }
+      tickers = custom.tickers.map((t) => ({ symbol: t, name: t }));
+    } else {
+      tickers = UNIVERSES[universe as UniverseKey] ?? [];
+    }
     const total = tickers.length;
     const quotes: EnrichedQuoteInput[] = [];
 
@@ -184,6 +206,41 @@ export default function EWScannerPage() {
     const passingCandidates = scored.filter((s) => s.passed);
     const modeFilteredCandidates = applyModeFilters(passingCandidates, mode);
 
+    // MTF confirmation for top 10 candidates (saves API calls)
+    const topForMtf = modeFilteredCandidates
+      .filter((c) => c.waveCount && c.series)
+      .slice(0, 10);
+
+    if (topForMtf.length > 0) {
+      setProgress(`Running multi-timeframe confirmation for top ${topForMtf.length}...`);
+      for (const c of topForMtf) {
+        try {
+          const mtfRes = await fetch(
+            `/api/ew-quote?ticker=${encodeURIComponent(c.ticker)}&detail=1&mtf=1`
+          );
+          if (mtfRes.ok) {
+            const mtfData = await mtfRes.json();
+            if (mtfData.dailySeries && c.waveCount) {
+              const dailySeries = mtfData.dailySeries as PriceSeries;
+              // Find ATH/Low indices in daily data
+              let dAthIdx = 0, dLowIdx = 0, dMax = -Infinity, dMin = Infinity;
+              for (let i = 0; i < dailySeries.high.length; i++) {
+                if (dailySeries.high[i] > dMax) { dMax = dailySeries.high[i]; dAthIdx = i; }
+              }
+              for (let i = dAthIdx; i < dailySeries.low.length; i++) {
+                if (dailySeries.low[i] < dMin) { dMin = dailySeries.low[i]; dLowIdx = i; }
+              }
+              c.mtfConfirmation = confirmMultiTimeframe(c.waveCount, dailySeries, dAthIdx, dLowIdx);
+            }
+          }
+        } catch {
+          // MTF is non-critical
+        }
+      }
+      // Update results to trigger re-render
+      setResults([...scored]);
+    }
+
     // Label passing candidates with enriched context
     if (modeFilteredCandidates.length > 0) {
       setProgress(`${modeFilteredCandidates.length} candidates found. Labeling...`);
@@ -229,9 +286,11 @@ export default function EWScannerPage() {
   const runDeep = useCallback(
     async (candidate: EnhancedScoredCandidate) => {
       setDeepTicker(candidate.ticker);
+      setDeepCandidate(candidate);
       setDeepAnalysis("");
       setDeepStructured(null);
       setDeepLoading(true);
+      setDeepTab("analysis");
 
       try {
         const res = await fetch("/api/ew-deep", {
@@ -263,6 +322,15 @@ export default function EWScannerPage() {
             swingCount: candidate.structureAnalysis?.swingCount,
             momentumScore: candidate.momentumAnalysis?.score,
             scannerMode: mode,
+            // V3 wave count data
+            waveCountValid: candidate.waveCount?.isValid,
+            waveCountScore: candidate.waveCount?.score,
+            waveCountPosition: candidate.waveCount?.position,
+            waveCountViolations: candidate.waveCount?.violations,
+            waveLabels: candidate.waveCount?.waves.map((w) => w.label).join("-"),
+            alternatePosition: candidate.waveCount?.alternateCount?.position,
+            fibExtensions: candidate.fibAnalysis?.extensions,
+            confluenceZones: candidate.fibAnalysis?.confluenceZones,
           }),
         });
 
@@ -463,7 +531,13 @@ export default function EWScannerPage() {
             </label>
             <select
               value={universe}
-              onChange={(e) => setUniverse(e.target.value as UniverseKey)}
+              onChange={(e) => {
+                if (e.target.value === "__custom__") {
+                  setShowUniverseBuilder(true);
+                } else {
+                  setUniverse(e.target.value);
+                }
+              }}
               className="w-full rounded-md border border-[#2a2a2a] bg-[#262626] px-3 py-2 text-sm text-[#e6e6e6]"
             >
               {UNIVERSE_KEYS.map((k) => (
@@ -471,6 +545,12 @@ export default function EWScannerPage() {
                   {k} ({UNIVERSES[k].length})
                 </option>
               ))}
+              {loadCustomUniverses().map((u) => (
+                <option key={u.id} value={`custom:${u.id}`}>
+                  {u.name} ({u.tickers.length})
+                </option>
+              ))}
+              <option value="__custom__">+ Custom...</option>
             </select>
           </div>
 
@@ -810,7 +890,7 @@ export default function EWScannerPage() {
         <Dialog.Root open onOpenChange={() => setDeepTicker(null)}>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-2xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <Dialog.Title className="text-lg font-bold text-white">
@@ -847,7 +927,45 @@ export default function EWScannerPage() {
                 </Dialog.Close>
               </div>
 
-              {deepLoading ? (
+              {/* Tab switcher */}
+              <div className="mb-4 flex gap-2 border-b border-[#2a2a2a] pb-2">
+                <button
+                  onClick={() => setDeepTab("analysis")}
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                    deepTab === "analysis"
+                      ? "bg-[#185FA5]/30 text-[#5ba3e6] ring-1 ring-[#185FA5]"
+                      : "bg-[#262626] text-[#a0a0a0] hover:text-white"
+                  }`}
+                >
+                  Analysis
+                </button>
+                {deepCandidate?.series && (
+                  <button
+                    onClick={() => setDeepTab("chart")}
+                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition-colors ${
+                      deepTab === "chart"
+                        ? "bg-[#185FA5]/30 text-[#5ba3e6] ring-1 ring-[#185FA5]"
+                        : "bg-[#262626] text-[#a0a0a0] hover:text-white"
+                    }`}
+                  >
+                    Chart
+                  </button>
+                )}
+              </div>
+
+              {deepTab === "chart" && deepCandidate?.series ? (
+                <div className="flex justify-center">
+                  <EWDeepChart
+                    series={deepCandidate.series}
+                    waveLabels={deepCandidate.waveCount?.waves}
+                    fibLevels={deepCandidate.fibAnalysis?.levels}
+                    fibExtensions={deepCandidate.fibAnalysis?.extensions}
+                    keyLevels={deepStructured?.keyLevels}
+                    width={600}
+                    height={360}
+                  />
+                </div>
+              ) : deepLoading ? (
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-[#5ba3e6]" />
                   <span className="ml-2 text-sm text-[#a0a0a0]">Analyzing...</span>
@@ -865,6 +983,31 @@ export default function EWScannerPage() {
                       <p className="mt-1 text-sm text-[#e6e6e6]">{deepStructured.alternateCount || "N/A"}</p>
                     </div>
                   </div>
+
+                  {/* Wave Count Quality (V3) */}
+                  {deepCandidate?.waveCount && (
+                    <div className="rounded-lg border border-purple-500/20 bg-purple-500/5 p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-[#666]">Algorithmic Wave Count</p>
+                      <div className="mt-1 flex items-center gap-3">
+                        <span className="text-sm font-bold text-purple-300">
+                          {deepCandidate.waveCount.waves.map((w) => w.label).join("-")}
+                        </span>
+                        <span className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                          deepCandidate.waveCount.isValid
+                            ? "bg-green-500/20 text-green-400"
+                            : "bg-yellow-500/20 text-yellow-400"
+                        }`}>
+                          {deepCandidate.waveCount.isValid ? "Valid" : "Partial"} ({deepCandidate.waveCount.score}/100)
+                        </span>
+                      </div>
+                      <p className="mt-1 text-xs text-purple-200/70">{deepCandidate.waveCount.position}</p>
+                      {deepCandidate.waveCount.violations.length > 0 && (
+                        <p className="mt-1 text-[10px] text-red-400/70">
+                          Violations: {deepCandidate.waveCount.violations.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Target & Invalidation */}
                   <div className="grid grid-cols-2 gap-3">
@@ -885,6 +1028,21 @@ export default function EWScannerPage() {
                       </div>
                     )}
                   </div>
+
+                  {/* Confluence Zones (V3) */}
+                  {deepCandidate?.fibAnalysis?.confluenceZones && deepCandidate.fibAnalysis.confluenceZones.length > 0 && (
+                    <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 p-3">
+                      <p className="mb-2 text-[10px] uppercase tracking-wider text-[#666]">Confluence Zones</p>
+                      <div className="space-y-1">
+                        {deepCandidate.fibAnalysis.confluenceZones.map((z, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-[#5ba3e6]">{z.levels.join(" + ")}</span>
+                            <span className="font-mono text-[#e6e6e6]">${z.price.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
 
                   {/* Key Levels */}
                   {deepStructured.keyLevels?.length > 0 && (
@@ -917,6 +1075,15 @@ export default function EWScannerPage() {
           </Dialog.Portal>
         </Dialog.Root>
       )}
+
+      {/* ── Universe Builder Modal ── */}
+      <EWUniverseBuilder
+        open={showUniverseBuilder}
+        onOpenChange={setShowUniverseBuilder}
+        onUniverseCreated={() => {
+          setCustomUniverseKeys(loadCustomUniverses().map((u) => `custom:${u.id}`));
+        }}
+      />
     </div>
   );
 }
@@ -978,6 +1145,20 @@ function CandidateCard({
           >
             {c.confidenceTier}
           </span>
+          {c.mtfConfirmation && (
+            <span
+              className={`rounded-full px-1.5 py-0.5 text-[9px] font-medium ${
+                c.mtfConfirmation.alignment === "confirmed"
+                  ? "bg-green-500/20 text-green-400"
+                  : c.mtfConfirmation.alignment === "conflicting"
+                    ? "bg-red-500/20 text-red-400"
+                    : "bg-yellow-500/20 text-yellow-400"
+              }`}
+              title={c.mtfConfirmation.details}
+            >
+              MTF {c.mtfConfirmation.alignment === "confirmed" ? "\u2713" : c.mtfConfirmation.alignment === "conflicting" ? "\u2717" : "?"}
+            </span>
+          )}
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <div className="h-1.5 w-10 overflow-hidden rounded-full bg-[#262626]">
@@ -1024,6 +1205,29 @@ function CandidateCard({
             value={`${c.structureAnalysis.classification} (${c.structureAnalysis.swingCount} swings)`}
           />
         )}
+        {c.waveCount && (
+          <FindingRow
+            dot={c.waveCount.isValid && c.waveCount.score >= 50 ? "pass" : c.waveCount.score > 30 ? "warn" : "fail"}
+            dotCss={dotCss}
+            label="Wave Count"
+            value={`${c.waveCount.waves.map((w) => w.label).join("-")} (${c.waveCount.score}/100${c.waveCount.isValid ? " valid" : ""})`}
+          />
+        )}
+        {c.waveCount?.position && (
+          <div className="flex items-start gap-2 text-xs">
+            <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-purple-400" />
+            <span className="text-purple-300">{c.waveCount.position}</span>
+          </div>
+        )}
+        {c.fibAnalysis?.extensions && c.fibAnalysis.extensions.length > 0 && (
+          <div className="flex items-start gap-2 text-xs">
+            <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-blue-400" />
+            <span className="text-[#a0a0a0]">
+              <span className="text-[#c0c0c0]">Targets:</span>{" "}
+              {c.fibAnalysis.extensions.slice(0, 3).map((e) => `$${e.price.toFixed(0)}`).join(", ")}
+            </span>
+          </div>
+        )}
 
         {/* EW Label */}
         {labels[c.ticker] ? (
@@ -1047,6 +1251,7 @@ function CandidateCard({
             athIdx={c.athIdx}
             lowIdx={c.lowIdx}
             fibLevels={c.fibAnalysis?.levels}
+            waveLabels={c.waveCount?.waves}
             width={200}
             height={50}
           />
@@ -1056,7 +1261,7 @@ function CandidateCard({
       {/* Fib Bar */}
       {c.fibAnalysis && (
         <div className="flex justify-center px-4 pb-1">
-          <EWFibBar retracementDepth={c.fibAnalysis.retracementDepth} width={200} height={22} />
+          <EWFibBar retracementDepth={c.fibAnalysis.retracementDepth} extensions={c.fibAnalysis.extensions} width={200} height={22} />
         </div>
       )}
 
