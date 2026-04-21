@@ -32,6 +32,7 @@ interface DeepInput {
   waveCountPosition?: string;
   waveCountViolations?: string[];
   waveLabels?: string;
+  wavePoints?: { label: string; price: number; date: string; type: string }[];
   alternatePosition?: string;
   fibExtensions?: { ratio: number; price: number; label: string }[];
   confluenceZones?: { price: number; levels: string[] }[];
@@ -68,15 +69,22 @@ export async function POST(request: NextRequest) {
   if (data.momentumScore != null) analysisContext += `\n- Momentum score: ${data.momentumScore.toFixed(2)} (-1 bearish to +1 bullish)`;
   if (data.scannerMode) analysisContext += `\n- Scanner mode: ${data.scannerMode}`;
 
-  // V3: Wave count context
+  // V3: Wave count context — algorithm is source of truth for prices
   let waveCountContext = "";
-  if (data.waveCountPosition) {
+  if (data.wavePoints?.length) {
+    waveCountContext += `\n\nALGORITHMIC WAVE COUNT (verified from actual price data — use these exact prices):`;
+    for (const wp of data.wavePoints) {
+      waveCountContext += `\n  Wave ${wp.label}: $${wp.price.toFixed(2)} (${wp.date}, swing ${wp.type})`;
+    }
+    waveCountContext += `\n- Position: ${data.waveCountPosition ?? "unknown"}`;
+    waveCountContext += `\n- Valid: ${data.waveCountValid ? "yes" : "no"} (quality score: ${data.waveCountScore ?? 0}/100)`;
+    if (data.waveCountViolations?.length) waveCountContext += `\n- Rule violations: ${data.waveCountViolations.join(", ")}`;
+    if (data.alternatePosition) waveCountContext += `\n- Alternate interpretation: ${data.alternatePosition}`;
+  } else if (data.waveCountPosition) {
     waveCountContext += `\nAlgorithmic wave counting:`;
     waveCountContext += `\n- Position: ${data.waveCountPosition}`;
     waveCountContext += `\n- Valid: ${data.waveCountValid ? "yes" : "no"} (score: ${data.waveCountScore ?? 0}/100)`;
     if (data.waveLabels) waveCountContext += `\n- Wave labels: ${data.waveLabels}`;
-    if (data.waveCountViolations?.length) waveCountContext += `\n- Rule violations: ${data.waveCountViolations.join(", ")}`;
-    if (data.alternatePosition) waveCountContext += `\n- Alternate count: ${data.alternatePosition}`;
   }
 
   let extensionContext = "";
@@ -93,6 +101,8 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  const hasWavePoints = data.wavePoints && data.wavePoints.length > 0;
+
   const prompt = `You are an expert Elliott Wave analyst. Provide a deep analysis for ${data.ticker} (${data.name}).
 
 Price data:
@@ -101,22 +111,24 @@ Price data:
 - Current: $${data.current.toFixed(2)}
 - Decline: ${data.declinePct.toFixed(1)}% over ${data.durationMonths.toFixed(0)} months
 - Recovery: ${data.recoveryPct.toFixed(1)}% from low
-- Mechanical score: ${data.score}/20
+- Mechanical score: ${data.score}/25
 ${data.label ? `- Quick label: ${data.label}` : ""}${seriesContext}${analysisContext ? `\nTechnical analysis:${analysisContext}` : ""}${waveCountContext}${extensionContext}
 
 Timeframes: ${data.htf} (primary) / ${data.ltf} (sub-waves)
+${hasWavePoints ? `
+CRITICAL: The wave points above are from algorithmic swing detection on actual price data. You MUST reference these exact prices in your analysis. Do NOT invent different wave prices. Your job is to INTERPRET the algorithmic wave count — explain what it means, assess confidence, provide targets and invalidation — not to re-count the waves with made-up prices.` : ""}
 
-Reply with ONLY valid JSON in this exact format:
+Reply with ONLY valid JSON (no code fences, no markdown) in this exact format:
 {
   "wavePosition": "e.g. Wave 2 bottom / Wave 4 correction / Wave 5 topping",
   "confidence": "high" | "medium" | "low",
-  "primaryCount": "Primary EW count description",
+  "primaryCount": "Primary EW count description using the exact wave prices provided",
   "alternateCount": "Alternate EW count description",
   "nextTarget": price_number_or_null,
   "invalidation": price_number_or_null,
   "keyLevels": [{"label": "Support 1", "price": 123.45}, {"label": "Resistance 1", "price": 234.56}],
   "riskLevel": "Low" | "Medium" | "High",
-  "summary": "Concise 2-3 sentence analysis with specific price levels"
+  "summary": "Concise 2-3 sentence analysis referencing the actual wave prices"
 }`;
 
   try {

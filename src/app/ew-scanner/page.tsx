@@ -322,12 +322,22 @@ export default function EWScannerPage() {
             swingCount: candidate.structureAnalysis?.swingCount,
             momentumScore: candidate.momentumAnalysis?.score,
             scannerMode: mode,
-            // V3 wave count data
+            // V3 wave count data — send actual prices and dates
             waveCountValid: candidate.waveCount?.isValid,
             waveCountScore: candidate.waveCount?.score,
             waveCountPosition: candidate.waveCount?.position,
             waveCountViolations: candidate.waveCount?.violations,
             waveLabels: candidate.waveCount?.waves.map((w) => w.label).join("-"),
+            wavePoints: candidate.waveCount?.waves.map((w) => ({
+              label: w.label,
+              price: w.price,
+              date: w.timestamp && candidate.series
+                ? new Date(w.timestamp * 1000).toISOString().slice(0, 10)
+                : candidate.series
+                  ? new Date(candidate.series.timestamps[w.index] * 1000).toISOString().slice(0, 10)
+                  : "unknown",
+              type: w.type,
+            })),
             alternatePosition: candidate.waveCount?.alternateCount?.position,
             fibExtensions: candidate.fibAnalysis?.extensions,
             confluenceZones: candidate.fibAnalysis?.confluenceZones,
