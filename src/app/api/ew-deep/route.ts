@@ -130,11 +130,13 @@ Reply with ONLY valid JSON in this exact format:
     const rawText =
       msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    // Extract JSON from response — handle code fences, extra text, etc.
     let text = rawText.trim();
-    const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
-    if (fenceMatch) {
-      text = fenceMatch[1].trim();
+    // Try to extract JSON object between first { and last }
+    const firstBrace = text.indexOf("{");
+    const lastBrace = text.lastIndexOf("}");
+    if (firstBrace !== -1 && lastBrace > firstBrace) {
+      text = text.slice(firstBrace, lastBrace + 1);
     }
 
     // Try JSON parse
