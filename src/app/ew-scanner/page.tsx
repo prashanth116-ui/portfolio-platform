@@ -16,16 +16,14 @@ import {
 } from "lucide-react";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UNIVERSES, UNIVERSE_KEYS, type UniverseKey } from "@/data/ew-universes";
-import { scoreBatch, type PriceData, type ScoredCandidate } from "@/lib/ew-scoring";
+import { scoreBatch, type QuoteData, type ScoredCandidate } from "@/lib/ew-scoring";
 import { exportToExcel, exportToCsv } from "@/lib/ew-export";
 
 const HTF_OPTIONS = ["Monthly", "Weekly"] as const;
 const LTF_OPTIONS = ["Daily", "4H", "1H"] as const;
 
-function htfToParams(htf: string): { range: string; interval: string } {
-  if (htf === "Weekly") return { range: "5y", interval: "1wk" };
-  return { range: "10y", interval: "1mo" };
-}
+const BATCH_SIZE = 10;
+const BATCH_DELAY = 300;
 
 export default function EWScannerPage() {
   const [htf, setHtf] = useState<string>("Monthly");
@@ -53,48 +51,61 @@ export default function EWScannerPage() {
     setScanning(true);
     setResults([]);
     setLabels({});
-    setProgress("Fetching price data...");
 
     const tickers = UNIVERSES[universe];
-    const nameMap: Record<string, string> = {};
-    tickers.forEach((t) => (nameMap[t.symbol] = t.name));
+    const total = tickers.length;
+    const quotes: QuoteData[] = [];
 
-    const { range, interval } = htfToParams(htf);
+    // Fetch in parallel batches of 10 with 300ms delay
+    for (let i = 0; i < total; i += BATCH_SIZE) {
+      const batch = tickers.slice(i, i + BATCH_SIZE);
+      setProgress(`Fetching ${Math.min(i + BATCH_SIZE, total)}/${total}...`);
 
-    try {
-      const res = await fetch("/api/quote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          tickers: tickers.map((t) => t.symbol),
-          names: nameMap,
-          range,
-          interval,
-        }),
-      });
+      const settled = await Promise.allSettled(
+        batch.map(async (t) => {
+          const res = await fetch(`/api/ew-quote?ticker=${encodeURIComponent(t.symbol)}`);
+          if (!res.ok) return null;
+          const data = await res.json();
+          if (data.error) return null;
+          return { ...data, ticker: t.symbol, name: t.name } as QuoteData;
+        })
+      );
 
-      const data = await res.json();
-      if (!data.results?.length) {
-        setProgress("No data returned. Try again.");
-        setScanning(false);
-        return;
+      for (const r of settled) {
+        if (r.status === "fulfilled" && r.value) {
+          quotes.push(r.value);
+        }
       }
 
-      setProgress("Scoring candidates...");
-      const priceData: PriceData[] = data.results;
-      const scored = scoreBatch(priceData, {
-        minDeclinePct: minDecline,
-        minMonths,
-        minRecoveryPct: minRecovery,
-      });
+      // 300ms delay between batches
+      if (i + BATCH_SIZE < total) {
+        await new Promise((r) => setTimeout(r, BATCH_DELAY));
+      }
+    }
 
-      setResults(scored);
-      const passingCandidates = scored.filter((s) => s.passed);
+    if (!quotes.length) {
+      setProgress("No data returned. Try again.");
+      setScanning(false);
+      return;
+    }
 
-      if (passingCandidates.length > 0) {
-        setProgress(`${passingCandidates.length} candidates found. Labeling...`);
-        setLabeling(true);
+    // Score all tickers locally (pure JS)
+    setProgress("Scoring candidates...");
+    const scored = scoreBatch(quotes, {
+      minDecline,
+      minDuration: minMonths,
+      minRecovery,
+    });
 
+    setResults(scored);
+    const passingCandidates = scored.filter((s) => s.passed);
+
+    // Single Claude call for all passing candidates
+    if (passingCandidates.length > 0) {
+      setProgress(`${passingCandidates.length} candidates found. Labeling...`);
+      setLabeling(true);
+
+      try {
         const labelRes = await fetch("/api/ew-label", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -105,7 +116,7 @@ export default function EWScannerPage() {
               low: c.low,
               current: c.current,
               declinePct: c.declinePct,
-              durationMonths: c.durationMonths,
+              monthsDecline: c.monthsDecline,
               recoveryPct: c.recoveryPct,
             })),
             htf,
@@ -115,13 +126,13 @@ export default function EWScannerPage() {
 
         const labelData = await labelRes.json();
         setLabels(labelData.labels ?? {});
-        setLabeling(false);
+      } catch {
+        // Labels are non-critical — cards still show without them
       }
-
-      setProgress("");
-    } catch (err) {
-      setProgress(`Error: ${err instanceof Error ? err.message : "Unknown"}`);
+      setLabeling(false);
     }
+
+    setProgress("");
     setScanning(false);
   }, [universe, htf, ltf, minDecline, minMonths, minRecovery]);
 
@@ -140,12 +151,12 @@ export default function EWScannerPage() {
             ticker: candidate.ticker,
             name: candidate.name,
             ath: candidate.ath,
-            athDate: candidate.athDate.toLocaleDateString(),
+            athDate: candidate.athYear.toFixed(1),
             low: candidate.low,
-            lowDate: candidate.lowDate.toLocaleDateString(),
+            lowDate: candidate.lowYear.toFixed(1),
             current: candidate.current,
             declinePct: candidate.declinePct,
-            durationMonths: candidate.durationMonths,
+            durationMonths: candidate.monthsDecline,
             recoveryPct: candidate.recoveryPct,
             score: candidate.score,
             label: labels[candidate.ticker],
@@ -169,6 +180,14 @@ export default function EWScannerPage() {
     if (n >= 0.7) return "bg-green-500";
     if (n >= 0.4) return "bg-yellow-500";
     return "bg-red-500";
+  };
+
+  // --- Year display helper ---
+  const fmtYear = (y: number) => {
+    const yr = Math.floor(y);
+    const mo = Math.round((y - yr) * 12) + 1;
+    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+    return `${months[mo - 1] ?? "Jan"} ${yr}`;
   };
 
   return (
@@ -380,7 +399,7 @@ export default function EWScannerPage() {
                 <StatCard
                   icon={<Clock className="h-4 w-4 text-yellow-400" />}
                   label="Avg Duration"
-                  value={`${(passed.reduce((s, r) => s + r.durationMonths, 0) / (passed.length || 1)).toFixed(0)}mo`}
+                  value={`${(passed.reduce((s, r) => s + r.monthsDecline, 0) / (passed.length || 1)).toFixed(0)}mo`}
                 />
                 <StatCard
                   icon={<TrendingUp className="h-4 w-4 text-green-400" />}
@@ -464,12 +483,14 @@ export default function EWScannerPage() {
                       <p className="font-mono text-[#e6e6e6]">
                         ${c.ath.toFixed(2)}
                       </p>
+                      <p className="text-[#555]">{fmtYear(c.athYear)}</p>
                     </div>
                     <div>
                       <p className="text-[#666]">Low</p>
                       <p className="font-mono text-red-400">
                         ${c.low.toFixed(2)}
                       </p>
+                      <p className="text-[#555]">{fmtYear(c.lowYear)}</p>
                     </div>
                     <div>
                       <p className="text-[#666]">Current</p>
@@ -487,7 +508,7 @@ export default function EWScannerPage() {
                     </span>
                     <span>
                       <Clock className="mr-0.5 inline h-3 w-3 text-yellow-400" />
-                      {c.durationMonths.toFixed(0)}mo
+                      {c.monthsDecline.toFixed(0)}mo
                     </span>
                     <span>
                       <TrendingUp className="mr-0.5 inline h-3 w-3 text-green-400" />
@@ -520,7 +541,7 @@ export default function EWScannerPage() {
                     <span
                       key={c.ticker}
                       className="rounded bg-[#262626] px-2 py-0.5 text-xs text-[#666]"
-                      title={`Score: ${c.score}/7 | Decline: ${c.declinePct.toFixed(1)}% | ${c.durationMonths.toFixed(0)}mo | Recovery: ${c.recoveryPct.toFixed(1)}%`}
+                      title={`Score: ${c.score}/7 | Decline: ${c.declinePct.toFixed(1)}% | ${c.monthsDecline.toFixed(0)}mo | Recovery: ${c.recoveryPct.toFixed(1)}%`}
                     >
                       {c.ticker}
                     </span>
