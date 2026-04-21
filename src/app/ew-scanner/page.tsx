@@ -188,12 +188,7 @@ export default function EWScannerPage() {
     return "bg-red-500";
   };
 
-  const fmtYear = (y: number) => {
-    const yr = Math.floor(y);
-    const mo = Math.round((y - yr) * 12) + 1;
-    const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-    return `${months[mo - 1] ?? "Jan"} ${yr}`;
-  };
+  const fmtYear = (y: number) => String(y);
 
   type DotStatus = "pass" | "warn" | "fail";
   const getDot = (value: number, threshold: number): DotStatus => {

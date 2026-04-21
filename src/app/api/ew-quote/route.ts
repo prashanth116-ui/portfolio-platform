@@ -9,7 +9,7 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const url = `${YAHOO_CHART}/${encodeURIComponent(ticker)}?range=10y&interval=1mo&includeTimestamps=true`;
+    const url = `${YAHOO_CHART}/${encodeURIComponent(ticker)}?interval=1mo&range=5y&includePrePost=false`;
     const res = await fetch(url, {
       headers: {
         "User-Agent":
@@ -62,18 +62,14 @@ export async function GET(request: NextRequest) {
 
     if (lowValue === Infinity) lowValue = current;
 
-    // Convert timestamps to fractional years (e.g. 2021.75 = Oct 2021)
-    const toFracYear = (ts: number) => {
-      const d = new Date(ts * 1000);
-      return d.getFullYear() + d.getMonth() / 12;
-    };
+    const toYear = (ts: number) => new Date(ts * 1000).getFullYear();
 
     return NextResponse.json({
       ath: Math.round(athValue * 100) / 100,
       low: Math.round(lowValue * 100) / 100,
       current: Math.round(current * 100) / 100,
-      athYear: Math.round(toFracYear(timestamps[athIdx]) * 100) / 100,
-      lowYear: Math.round(toFracYear(timestamps[lowIdx]) * 100) / 100,
+      athYear: toYear(timestamps[athIdx]),
+      lowYear: toYear(timestamps[lowIdx]),
     });
   } catch (err) {
     return NextResponse.json(
