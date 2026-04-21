@@ -51,9 +51,81 @@ const LTF_OPTIONS = ["Daily", "4H", "1H"] as const;
 
 const BATCH_SIZE = 10;
 const BATCH_DELAY = 300;
+const LABEL_TOP_N = 30;
+const LABEL_MIN_SCORE = 0.5; // 50% normalized score
 
 type SortKey = "score" | "decline" | "recovery" | "sector" | "confidence";
 type GroupKey = "none" | "sector" | "confidence";
+
+interface Preset {
+  name: string;
+  shortName: string;
+  description: string;
+  mode: ScannerMode;
+  htf: string;
+  ltf: string;
+  minDecline: number;
+  minMonths: number;
+  minRecovery: number;
+}
+
+const PRESETS: Preset[] = [
+  {
+    name: "Deep Value W2",
+    shortName: "Deep Value",
+    description: "Classic beaten-down stocks recovering from golden zone. High conviction, fewer results.",
+    mode: "wave2",
+    htf: "Weekly",
+    ltf: "Daily",
+    minDecline: 40,
+    minMonths: 6,
+    minRecovery: 10,
+  },
+  {
+    name: "Quality Pullback W4",
+    shortName: "Pullback",
+    description: "Strong stocks with shallow dips — high win rate. Best for trending markets.",
+    mode: "wave4",
+    htf: "Weekly",
+    ltf: "Daily",
+    minDecline: 15,
+    minMonths: 3,
+    minRecovery: 20,
+  },
+  {
+    name: "Momentum Top W5",
+    shortName: "Topping",
+    description: "Near ATH with exhaustion signals. Use for short/exit timing, not entries.",
+    mode: "wave5",
+    htf: "Weekly",
+    ltf: "Daily",
+    minDecline: 5,
+    minMonths: 1,
+    minRecovery: 80,
+  },
+  {
+    name: "Breakout",
+    shortName: "Breakout",
+    description: "Recovered most of decline with volume. New impulse wave starting.",
+    mode: "breakout",
+    htf: "Weekly",
+    ltf: "Daily",
+    minDecline: 20,
+    minMonths: 3,
+    minRecovery: 40,
+  },
+  {
+    name: "Aggressive W2",
+    shortName: "Wide Net",
+    description: "Wider net, catches early recoveries before they're obvious. More results, lower avg quality.",
+    mode: "wave2",
+    htf: "Weekly",
+    ltf: "Daily",
+    minDecline: 25,
+    minMonths: 3,
+    minRecovery: 5,
+  },
+];
 
 export default function EWScannerPage() {
   const [htf, setHtf] = useState<string>("Monthly");
@@ -101,6 +173,16 @@ export default function EWScannerPage() {
     setMinDecline(cfg.defaults.minDecline);
     setMinMonths(cfg.defaults.minMonths);
     setMinRecovery(cfg.defaults.minRecovery);
+  }, []);
+
+  // Apply a preset (cheat code)
+  const applyPreset = useCallback((preset: Preset) => {
+    setMode(preset.mode);
+    setHtf(preset.htf);
+    setLtf(preset.ltf);
+    setMinDecline(preset.minDecline);
+    setMinMonths(preset.minMonths);
+    setMinRecovery(preset.minRecovery);
   }, []);
 
   const passed = useMemo(() => results.filter((r) => r.passed), [results]);
@@ -241,9 +323,17 @@ export default function EWScannerPage() {
       setResults([...scored]);
     }
 
-    // Label passing candidates with enriched context
-    if (modeFilteredCandidates.length > 0) {
-      setProgress(`${modeFilteredCandidates.length} candidates found. Labeling...`);
+    // Label top candidates only (token gate: top N above min score)
+    const labelCandidates = modeFilteredCandidates
+      .filter((c) => c.enhancedNormalized >= LABEL_MIN_SCORE)
+      .slice(0, LABEL_TOP_N);
+
+    if (labelCandidates.length > 0) {
+      const skipped = modeFilteredCandidates.length - labelCandidates.length;
+      setProgress(
+        `${modeFilteredCandidates.length} candidates found. Labeling top ${labelCandidates.length}...` +
+        (skipped > 0 ? ` (${skipped} below 50% skipped)` : "")
+      );
       setLabeling(true);
 
       try {
@@ -251,7 +341,7 @@ export default function EWScannerPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            candidates: modeFilteredCandidates.map((c) => ({
+            candidates: labelCandidates.map((c) => ({
               ticker: c.ticker,
               ath: c.ath,
               low: c.low,
@@ -488,6 +578,32 @@ export default function EWScannerPage() {
             <p className="mt-2 text-[10px] leading-tight text-[#666]">
               {modeConfig.description}
             </p>
+          </div>
+
+          {/* Presets */}
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#a0a0a0]">
+              Quick Presets
+            </label>
+            <div className="space-y-1.5">
+              {PRESETS.map((p) => (
+                <button
+                  key={p.name}
+                  onClick={() => applyPreset(p)}
+                  className="group flex w-full items-start gap-2 rounded-md px-2.5 py-2 text-left transition-colors hover:bg-[#262626]"
+                >
+                  <ChevronRight className="mt-0.5 h-3 w-3 shrink-0 text-[#555] transition-colors group-hover:text-[#5ba3e6]" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-medium text-[#e6e6e6] group-hover:text-[#5ba3e6]">
+                      {p.shortName}
+                    </p>
+                    <p className="text-[10px] leading-tight text-[#555] group-hover:text-[#888]">
+                      {p.description}
+                    </p>
+                  </div>
+                </button>
+              ))}
+            </div>
           </div>
 
           {/* HTF */}
