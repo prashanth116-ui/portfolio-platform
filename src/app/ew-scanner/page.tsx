@@ -175,19 +175,36 @@ export default function EWScannerPage() {
     [htf, ltf, labels]
   );
 
-  // --- Score bar color ---
-  const scoreColor = (n: number) => {
+  // --- Helpers ---
+  const scoreTextColor = (n: number) => {
+    if (n >= 0.7) return "text-green-400";
+    if (n >= 0.4) return "text-yellow-400";
+    return "text-red-400";
+  };
+
+  const scoreBgColor = (n: number) => {
     if (n >= 0.7) return "bg-green-500";
     if (n >= 0.4) return "bg-yellow-500";
     return "bg-red-500";
   };
 
-  // --- Year display helper ---
   const fmtYear = (y: number) => {
     const yr = Math.floor(y);
     const mo = Math.round((y - yr) * 12) + 1;
     const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
     return `${months[mo - 1] ?? "Jan"} ${yr}`;
+  };
+
+  type DotStatus = "pass" | "warn" | "fail";
+  const getDot = (value: number, threshold: number): DotStatus => {
+    if (value >= threshold) return "pass";
+    if (value >= threshold * 0.5) return "warn";
+    return "fail";
+  };
+  const dotCss: Record<DotStatus, string> = {
+    pass: "bg-green-400",
+    warn: "bg-yellow-400",
+    fail: "bg-red-400",
   };
 
   return (
@@ -439,93 +456,109 @@ export default function EWScannerPage() {
           {/* Result cards */}
           {passed.length > 0 && (
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {passed.map((c) => (
-                <div
-                  key={c.ticker}
-                  className="group rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]"
-                >
-                  {/* Header */}
-                  <div className="mb-3 flex items-start justify-between">
-                    <div>
-                      <span className="text-lg font-bold text-white">
-                        {c.ticker}
-                      </span>
-                      <span className="ml-2 text-xs text-[#a0a0a0]">
-                        {c.name}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-xs font-medium text-[#a0a0a0]">
-                        {c.score}/7
-                      </span>
-                      <div className="h-2 w-12 overflow-hidden rounded-full bg-[#262626]">
-                        <div
-                          className={`h-full rounded-full ${scoreColor(c.normalizedScore)}`}
-                          style={{ width: `${c.normalizedScore * 100}%` }}
-                        />
+              {passed.map((c, idx) => {
+                const pct = Math.round(c.normalizedScore * 100);
+                const isHigh = c.normalizedScore >= 0.7;
+                const declineDot = getDot(c.declinePct, minDecline);
+                const directionDot: DotStatus = c.athYear <= c.lowYear ? "pass" : "fail";
+                const durationDot = getDot(c.monthsDecline, minMonths);
+                const recoveryDot = getDot(c.recoveryPct, minRecovery);
+
+                return (
+                  <div
+                    key={c.ticker}
+                    className={`ew-card-in group rounded-lg border bg-[#1a1a1a] transition-colors hover:border-[#3a3a3a] ${
+                      isHigh
+                        ? "border-green-500/40"
+                        : "border-[#2a2a2a]"
+                    }`}
+                    style={{ animationDelay: `${idx * 50}ms` }}
+                  >
+                    {/* ── Top: Ticker + Score ── */}
+                    <div className="flex items-center justify-between border-b border-[#2a2a2a] px-4 py-3">
+                      <div className="min-w-0">
+                        <span className="text-base font-bold text-white">{c.ticker}</span>
+                        <span className="ml-2 truncate text-xs text-[#a0a0a0]">{c.name}</span>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-2">
+                        <div className="h-1.5 w-10 overflow-hidden rounded-full bg-[#262626]">
+                          <div
+                            className={`h-full rounded-full ${scoreBgColor(c.normalizedScore)}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        <span className={`text-sm font-bold ${scoreTextColor(c.normalizedScore)}`}>
+                          {pct}%
+                        </span>
                       </div>
                     </div>
-                  </div>
 
-                  {/* EW Label */}
-                  {labels[c.ticker] ? (
-                    <p className="mb-3 rounded bg-[#185FA5]/10 px-2 py-1 text-xs text-[#5ba3e6]">
-                      {labels[c.ticker]}
-                    </p>
-                  ) : labeling ? (
-                    <div className="mb-3 h-6 animate-pulse rounded bg-[#262626]" />
-                  ) : null}
+                    {/* ── Body: Finding rows ── */}
+                    <div className="space-y-1.5 px-4 pt-3 pb-2">
+                      <FindingRow dot={declineDot} dotCss={dotCss} label="Decline" value={`${c.declinePct.toFixed(1)}% (≥${minDecline}%)`} />
+                      <FindingRow dot={directionDot} dotCss={dotCss} label="Direction" value={directionDot === "pass" ? "ATH → Low correct" : "ATH after Low"} />
+                      <FindingRow dot={durationDot} dotCss={dotCss} label="Duration" value={`${c.monthsDecline.toFixed(0)}mo (≥${minMonths}mo)`} />
+                      <FindingRow dot={recoveryDot} dotCss={dotCss} label="Recovery" value={`${c.recoveryPct.toFixed(1)}% (≥${minRecovery}%)`} />
 
-                  {/* Price levels */}
-                  <div className="mb-3 grid grid-cols-3 gap-2 text-center text-xs">
-                    <div>
-                      <p className="text-[#666]">ATH</p>
-                      <p className="font-mono text-[#e6e6e6]">
-                        ${c.ath.toFixed(2)}
-                      </p>
-                      <p className="text-[#555]">{fmtYear(c.athYear)}</p>
+                      {/* EW Label (cyan dot) */}
+                      {labels[c.ticker] ? (
+                        <div className="flex items-start gap-2 text-xs">
+                          <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
+                          <span className="text-[#5ba3e6]">{labels[c.ticker]}</span>
+                        </div>
+                      ) : labeling ? (
+                        <div className="flex items-center gap-2">
+                          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#333]" />
+                          <div className="h-3 w-3/4 animate-pulse rounded bg-[#262626]" />
+                        </div>
+                      ) : null}
                     </div>
-                    <div>
-                      <p className="text-[#666]">Low</p>
-                      <p className="font-mono text-red-400">
-                        ${c.low.toFixed(2)}
-                      </p>
-                      <p className="text-[#555]">{fmtYear(c.lowYear)}</p>
+
+                    {/* ── Price Grid ── */}
+                    <div className="mx-4 grid grid-cols-3 gap-2 border-t border-[#2a2a2a] py-3 text-center text-xs">
+                      <div>
+                        <p className="text-[#666]">ATH</p>
+                        <p className="font-mono font-medium text-[#e6e6e6]">${c.ath.toFixed(2)}</p>
+                        <p className="text-[#555]">{fmtYear(c.athYear)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#666]">Low</p>
+                        <p className="font-mono font-medium text-red-400">${c.low.toFixed(2)}</p>
+                        <p className="text-[#555]">{fmtYear(c.lowYear)}</p>
+                      </div>
+                      <div>
+                        <p className="text-[#666]">Current</p>
+                        <p className="font-mono font-medium text-green-400">${c.current.toFixed(2)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-[#666]">Current</p>
-                      <p className="font-mono text-green-400">
-                        ${c.current.toFixed(2)}
-                      </p>
+
+                    {/* ── Footer: Stats + Deep Analysis ── */}
+                    <div className="flex items-center justify-between border-t border-[#2a2a2a] px-4 py-2.5">
+                      <div className="flex gap-3 text-xs text-[#a0a0a0]">
+                        <span>
+                          <TrendingDown className="mr-0.5 inline h-3 w-3 text-red-400" />
+                          {c.declinePct.toFixed(1)}%
+                        </span>
+                        <span>
+                          <Clock className="mr-0.5 inline h-3 w-3 text-yellow-400" />
+                          {c.monthsDecline.toFixed(0)}mo
+                        </span>
+                        <span>
+                          <TrendingUp className="mr-0.5 inline h-3 w-3 text-green-400" />
+                          {c.recoveryPct.toFixed(1)}%
+                        </span>
+                      </div>
+                      <button
+                        onClick={() => runDeep(c)}
+                        className="flex items-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-2.5 py-1 text-xs text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
+                      >
+                        Deep Analysis
+                        <ChevronRight className="h-3 w-3" />
+                      </button>
                     </div>
                   </div>
-
-                  {/* Metrics */}
-                  <div className="mb-3 flex justify-between text-xs text-[#a0a0a0]">
-                    <span>
-                      <TrendingDown className="mr-0.5 inline h-3 w-3 text-red-400" />
-                      {c.declinePct.toFixed(1)}%
-                    </span>
-                    <span>
-                      <Clock className="mr-0.5 inline h-3 w-3 text-yellow-400" />
-                      {c.monthsDecline.toFixed(0)}mo
-                    </span>
-                    <span>
-                      <TrendingUp className="mr-0.5 inline h-3 w-3 text-green-400" />
-                      {c.recoveryPct.toFixed(1)}%
-                    </span>
-                  </div>
-
-                  {/* Analyze button */}
-                  <button
-                    onClick={() => runDeep(c)}
-                    className="flex w-full items-center justify-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-3 py-1.5 text-xs text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
-                  >
-                    Deep Analysis
-                    <ChevronRight className="h-3 w-3" />
-                  </button>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
 
@@ -584,6 +617,27 @@ export default function EWScannerPage() {
           </Dialog.Portal>
         </Dialog.Root>
       )}
+    </div>
+  );
+}
+
+function FindingRow({
+  dot,
+  dotCss,
+  label,
+  value,
+}: {
+  dot: "pass" | "warn" | "fail";
+  dotCss: Record<string, string>;
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span className={`mt-1 inline-block h-2 w-2 shrink-0 rounded-full ${dotCss[dot]}`} />
+      <span className="text-[#a0a0a0]">
+        <span className="text-[#c0c0c0]">{label}:</span> {value}
+      </span>
     </div>
   );
 }
