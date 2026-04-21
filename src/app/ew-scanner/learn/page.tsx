@@ -135,11 +135,14 @@ function CorrectionPatternsDiagram() {
         {/* converging trendlines */}
         <line x1="480" y1="45" x2="620" y2="80" stroke="#5ba3e6" strokeWidth="1" strokeDasharray="4" />
         <line x1="515" y1="160" x2="620" y2="118" stroke="#5ba3e6" strokeWidth="1" strokeDasharray="4" />
-        <text x="472" y="40" fontSize="10" fill="#ef4444" fontWeight="bold">A</text>
-        <text x="508" y="177" fontSize="10" fill="#ef4444" fontWeight="bold">B</text>
-        <text x="538" y="63" fontSize="10" fill="#ef4444" fontWeight="bold">C</text>
-        <text x="573" y="155" fontSize="10" fill="#ef4444" fontWeight="bold">D</text>
-        <text x="593" y="85" fontSize="10" fill="#ef4444" fontWeight="bold">E</text>
+        {/* origin marker */}
+        <circle cx="480" cy="45" r="3" fill="#a0a0a0" opacity="0.5" />
+        {/* labels at wave endpoints */}
+        <text x="508" y="177" fontSize="10" fill="#ef4444" fontWeight="bold">A</text>
+        <text x="538" y="63" fontSize="10" fill="#ef4444" fontWeight="bold">B</text>
+        <text x="573" y="155" fontSize="10" fill="#ef4444" fontWeight="bold">C</text>
+        <text x="593" y="83" fontSize="10" fill="#ef4444" fontWeight="bold">D</text>
+        <text x="613" y="138" fontSize="10" fill="#ef4444" fontWeight="bold">E</text>
         <text x="545" y="225" fontSize="12" fill="#a0a0a0" textAnchor="middle" fontWeight="600">Triangle (3-3-3-3-3)</text>
         {/* breakout arrow */}
         <polyline points="610,125 645,100" fill="none" stroke="#22c55e" strokeWidth="2" markerEnd="url(#arrowG)" />
