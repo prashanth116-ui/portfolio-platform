@@ -13,7 +13,9 @@ import {
   TrendingUp,
   Clock,
   BarChart3,
+  BookOpen,
 } from "lucide-react";
+import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
 import { UNIVERSES, UNIVERSE_KEYS, type UniverseKey } from "@/data/ew-universes";
 import { scoreBatch, type QuoteData, type ScoredCandidate } from "@/lib/ew-scoring";
@@ -151,9 +153,9 @@ export default function EWScannerPage() {
             ticker: candidate.ticker,
             name: candidate.name,
             ath: candidate.ath,
-            athDate: candidate.athYear.toFixed(1),
+            athDate: String(candidate.athYear),
             low: candidate.low,
-            lowDate: candidate.lowYear.toFixed(1),
+            lowDate: String(candidate.lowYear),
             current: candidate.current,
             declinePct: candidate.declinePct,
             durationMonths: candidate.monthsDecline,
@@ -206,16 +208,26 @@ export default function EWScannerPage() {
     <div className="space-y-6">
       {/* Header */}
       <section>
-        <div className="flex items-center gap-3">
-          <Activity className="h-8 w-8 text-[#5ba3e6]" />
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
-              EW Scanner
-            </h1>
-            <p className="mt-1 text-[#a0a0a0]">
-              Elliott Wave live scanner with mechanical scoring and AI wave labeling.
-            </p>
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Activity className="h-8 w-8 text-[#5ba3e6]" />
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight text-white sm:text-4xl">
+                EW Scanner
+              </h1>
+              <p className="mt-1 text-[#a0a0a0]">
+                Elliott Wave live scanner with mechanical scoring and AI wave labeling.
+              </p>
+            </div>
           </div>
+          <Link
+            href="/ew-scanner/learn"
+            className="flex items-center gap-1.5 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] px-4 py-2 text-sm text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
+          >
+            <BookOpen className="h-4 w-4" />
+            <span className="hidden sm:inline">Learn EW Theory</span>
+            <span className="sm:hidden">Learn</span>
+          </Link>
         </div>
       </section>
 
