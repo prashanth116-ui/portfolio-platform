@@ -127,17 +127,24 @@ Reply with ONLY valid JSON in this exact format:
       messages: [{ role: "user", content: prompt }],
     });
 
-    const text =
+    const rawText =
       msg.content[0].type === "text" ? msg.content[0].text : "";
+
+    // Strip markdown code fences if present (```json ... ``` or ``` ... ```)
+    let text = rawText.trim();
+    const fenceMatch = text.match(/^```(?:json)?\s*\n?([\s\S]*?)\n?\s*```$/);
+    if (fenceMatch) {
+      text = fenceMatch[1].trim();
+    }
 
     // Try JSON parse
     try {
       const parsed = JSON.parse(text);
-      return NextResponse.json({ analysis: text, structured: parsed });
+      return NextResponse.json({ analysis: parsed.summary ?? text, structured: parsed });
     } catch {
       // Fall back to wrapping raw text in summary field
       return NextResponse.json({
-        analysis: text,
+        analysis: rawText,
         structured: {
           wavePosition: "",
           confidence: "medium",
@@ -147,7 +154,7 @@ Reply with ONLY valid JSON in this exact format:
           invalidation: null,
           keyLevels: [],
           riskLevel: "Medium",
-          summary: text,
+          summary: rawText,
         },
       });
     }
