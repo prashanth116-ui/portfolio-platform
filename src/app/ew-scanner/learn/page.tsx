@@ -109,21 +109,25 @@ function CorrectionPatternsDiagram() {
       <svg viewBox="0 0 680 230" className="w-full max-w-2xl" aria-label="Correction patterns: zigzag, flat, triangle">
         {/* ZIGZAG */}
         <polyline points="30,50 85,175 125,85 185,195" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" />
-        <text x="22" y="43" fontSize="11" fill="#ef4444" fontWeight="bold">A</text>
-        <text x="78" y="193" fontSize="11" fill="#ef4444" fontWeight="bold">↙</text>
+        {/* origin marker */}
+        <circle cx="30" cy="50" r="3" fill="#a0a0a0" opacity="0.5" />
+        {/* labels at wave endpoints */}
+        <text x="78" y="193" fontSize="11" fill="#ef4444" fontWeight="bold">A</text>
         <text x="118" y="78" fontSize="11" fill="#ef4444" fontWeight="bold">B</text>
         <text x="178" y="210" fontSize="11" fill="#ef4444" fontWeight="bold">C</text>
-        <text x="65" y="225" fontSize="12" fill="#a0a0a0" textAnchor="middle" fontWeight="600">Zigzag (5-3-5)</text>
+        <text x="100" y="225" fontSize="12" fill="#a0a0a0" textAnchor="middle" fontWeight="600">Zigzag (5-3-5)</text>
         {/* dashed start line */}
         <line x1="30" y1="50" x2="30" y2="195" stroke="#2a2a2a" strokeDasharray="3" />
 
         {/* FLAT */}
         <polyline points="250,50 305,145 355,55 410,165" fill="none" stroke="#ef4444" strokeWidth="2" strokeLinejoin="round" />
-        <text x="242" y="43" fontSize="11" fill="#ef4444" fontWeight="bold">A</text>
-        <text x="298" y="162" fontSize="11" fill="#ef4444" fontWeight="bold">↙</text>
+        {/* origin marker */}
+        <circle cx="250" cy="50" r="3" fill="#a0a0a0" opacity="0.5" />
+        {/* labels at wave endpoints */}
+        <text x="298" y="162" fontSize="11" fill="#ef4444" fontWeight="bold">A</text>
         <text x="348" y="48" fontSize="11" fill="#ef4444" fontWeight="bold">B</text>
         <text x="413" y="178" fontSize="11" fill="#ef4444" fontWeight="bold">C</text>
-        <text x="315" y="225" fontSize="12" fill="#a0a0a0" textAnchor="middle" fontWeight="600">Flat (3-3-5)</text>
+        <text x="330" y="225" fontSize="12" fill="#a0a0a0" textAnchor="middle" fontWeight="600">Flat (3-3-5)</text>
         <line x1="250" y1="50" x2="250" y2="165" stroke="#2a2a2a" strokeDasharray="3" />
 
         {/* TRIANGLE */}
@@ -638,7 +642,7 @@ export default function EWLearnPage() {
               rows={[
                 ["Regular flat", "≈ 90–100% of A", "≈ A", "Common"],
                 ["Expanded flat", "> 100% of A", "Extends beyond A", "Very common in wave 4"],
-                ["Running flat", "< 100% of A", "Fails to reach end of A", "Rare — strong underlying trend"],
+                ["Running flat", "> 100% of A (like expanded)", "Fails to reach end of A", "Rare — strong underlying trend"],
               ]}
             />
             <Prose>
@@ -724,8 +728,8 @@ export default function EWLearnPage() {
             <DataTable
               headers={["Type", "Position", "Sub-waves", "Signal"]}
               rows={[
-                ["Leading diagonal", "Wave 1 or wave A of zigzag", "3-3-3-3-3", "Start of a new trend"],
-                ["Ending diagonal", "Wave 5 or wave C", "5-3-5-3-5", "Trend is exhausted"],
+                ["Leading diagonal", "Wave 1 or wave A of zigzag", "5-3-5-3-5", "Start of a new trend"],
+                ["Ending diagonal", "Wave 5 or wave C", "3-3-3-3-3", "Trend is exhausted"],
               ]}
             />
             <Prose>
