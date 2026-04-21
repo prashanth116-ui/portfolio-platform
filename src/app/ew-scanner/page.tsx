@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   Activity,
   Search,
@@ -14,12 +14,34 @@ import {
   Clock,
   BarChart3,
   BookOpen,
+  Save,
+  FolderOpen,
+  Trash2,
+  ArrowUpDown,
+  Layers,
 } from "lucide-react";
 import Link from "next/link";
 import * as Dialog from "@radix-ui/react-dialog";
+import * as Tabs from "@radix-ui/react-tabs";
+import * as Select from "@radix-ui/react-select";
 import { UNIVERSES, UNIVERSE_KEYS, type UniverseKey } from "@/data/ew-universes";
-import { scoreBatch, type QuoteData, type ScoredCandidate } from "@/lib/ew-scoring";
-import { exportToExcel, exportToCsv } from "@/lib/ew-export";
+import {
+  scoreBatchEnhanced,
+  type EnrichedQuoteInput,
+} from "@/lib/ew-scoring";
+import { exportEnhancedToExcel, exportEnhancedToCsv } from "@/lib/ew-export";
+import type {
+  ScannerMode,
+  EnhancedScoredCandidate,
+  DeepAnalysisResult,
+  PriceSeries,
+  SavedScan,
+} from "@/lib/ew-types";
+import { SCANNER_MODES, getModeConfig, applyModeFilters } from "@/lib/ew-scanner-modes";
+import { saveScan, loadScans, deleteScan } from "@/lib/ew-watchlist";
+import { EWSparkline } from "@/components/ew-sparkline";
+import { EWFibBar } from "@/components/ew-fib-bar";
+import { EWSectorHeatmap } from "@/components/ew-sector-heatmap";
 
 const HTF_OPTIONS = ["Monthly", "Weekly"] as const;
 const LTF_OPTIONS = ["Daily", "4H", "1H"] as const;
@@ -27,26 +49,75 @@ const LTF_OPTIONS = ["Daily", "4H", "1H"] as const;
 const BATCH_SIZE = 10;
 const BATCH_DELAY = 300;
 
+type SortKey = "score" | "decline" | "recovery" | "sector" | "confidence";
+type GroupKey = "none" | "sector" | "confidence" | "wavePosition";
+
 export default function EWScannerPage() {
   const [htf, setHtf] = useState<string>("Monthly");
   const [ltf, setLtf] = useState<string>("Daily");
   const [universe, setUniverse] = useState<UniverseKey>("SP500");
-  const [minDecline, setMinDecline] = useState(20);
-  const [minMonths, setMinMonths] = useState(3);
-  const [minRecovery, setMinRecovery] = useState(10);
+  const [mode, setMode] = useState<ScannerMode>("wave2");
+
+  // Default sliders from mode config
+  const modeConfig = getModeConfig(mode);
+  const [minDecline, setMinDecline] = useState(modeConfig.defaults.minDecline);
+  const [minMonths, setMinMonths] = useState(modeConfig.defaults.minMonths);
+  const [minRecovery, setMinRecovery] = useState(modeConfig.defaults.minRecovery);
 
   const [scanning, setScanning] = useState(false);
   const [progress, setProgress] = useState("");
-  const [results, setResults] = useState<ScoredCandidate[]>([]);
+  const [results, setResults] = useState<EnhancedScoredCandidate[]>([]);
   const [labels, setLabels] = useState<Record<string, string>>({});
   const [labeling, setLabeling] = useState(false);
 
   const [deepTicker, setDeepTicker] = useState<string | null>(null);
   const [deepAnalysis, setDeepAnalysis] = useState<string>("");
+  const [deepStructured, setDeepStructured] = useState<DeepAnalysisResult | null>(null);
   const [deepLoading, setDeepLoading] = useState(false);
+
+  const [sortBy, setSortBy] = useState<SortKey>("score");
+  const [groupBy, setGroupBy] = useState<GroupKey>("none");
+
+  const [savedScans, setSavedScans] = useState<SavedScan[]>([]);
+  const [showSaved, setShowSaved] = useState(false);
+
+  // Load saved scans on mount
+  useEffect(() => {
+    setSavedScans(loadScans());
+  }, []);
+
+  // Update slider defaults when mode changes
+  const handleModeChange = useCallback((newMode: ScannerMode) => {
+    setMode(newMode);
+    const cfg = getModeConfig(newMode);
+    setMinDecline(cfg.defaults.minDecline);
+    setMinMonths(cfg.defaults.minMonths);
+    setMinRecovery(cfg.defaults.minRecovery);
+  }, []);
 
   const passed = results.filter((r) => r.passed);
   const failed = results.filter((r) => !r.passed);
+
+  // Apply mode filters to passing candidates
+  const modeFiltered = applyModeFilters(passed, mode);
+
+  // Sort
+  const sorted = [...modeFiltered].sort((a, b) => {
+    switch (sortBy) {
+      case "score": return b.enhancedNormalized - a.enhancedNormalized;
+      case "decline": return b.declinePct - a.declinePct;
+      case "recovery": return b.recoveryPct - a.recoveryPct;
+      case "sector": return (a.sector ?? "").localeCompare(b.sector ?? "");
+      case "confidence": {
+        const tierOrder = { high: 0, probable: 1, speculative: 2 };
+        return tierOrder[a.confidenceTier] - tierOrder[b.confidenceTier];
+      }
+      default: return 0;
+    }
+  });
+
+  // Group
+  const grouped = groupCandidates(sorted, groupBy);
 
   // --- Scan ---
   const runScan = useCallback(async () => {
@@ -56,20 +127,33 @@ export default function EWScannerPage() {
 
     const tickers = UNIVERSES[universe];
     const total = tickers.length;
-    const quotes: QuoteData[] = [];
+    const quotes: EnrichedQuoteInput[] = [];
 
-    // Fetch in parallel batches of 10 with 300ms delay
     for (let i = 0; i < total; i += BATCH_SIZE) {
       const batch = tickers.slice(i, i + BATCH_SIZE);
       setProgress(`Fetching ${Math.min(i + BATCH_SIZE, total)}/${total}...`);
 
       const settled = await Promise.allSettled(
         batch.map(async (t) => {
-          const res = await fetch(`/api/ew-quote?ticker=${encodeURIComponent(t.symbol)}`);
+          const res = await fetch(
+            `/api/ew-quote?ticker=${encodeURIComponent(t.symbol)}&detail=1`
+          );
           if (!res.ok) return null;
           const data = await res.json();
           if (data.error) return null;
-          return { ...data, ticker: t.symbol, name: t.name } as QuoteData;
+          return {
+            ticker: t.symbol,
+            name: t.name,
+            sector: t.sector,
+            ath: data.ath,
+            low: data.low,
+            current: data.current,
+            athYear: data.athYear,
+            lowYear: data.lowYear,
+            series: data.series as PriceSeries | undefined,
+            athIdx: data.athIdx as number | undefined,
+            lowIdx: data.lowIdx as number | undefined,
+          } as EnrichedQuoteInput;
         })
       );
 
@@ -79,7 +163,6 @@ export default function EWScannerPage() {
         }
       }
 
-      // 300ms delay between batches
       if (i + BATCH_SIZE < total) {
         await new Promise((r) => setTimeout(r, BATCH_DELAY));
       }
@@ -91,20 +174,21 @@ export default function EWScannerPage() {
       return;
     }
 
-    // Score all tickers locally (pure JS)
-    setProgress("Scoring candidates...");
-    const scored = scoreBatch(quotes, {
+    setProgress("Analyzing & scoring...");
+    const scored = scoreBatchEnhanced(quotes, {
       minDecline,
       minDuration: minMonths,
       minRecovery,
+      mode,
     });
 
     setResults(scored);
     const passingCandidates = scored.filter((s) => s.passed);
+    const modeFilteredCandidates = applyModeFilters(passingCandidates, mode);
 
-    // Single Claude call for all passing candidates
-    if (passingCandidates.length > 0) {
-      setProgress(`${passingCandidates.length} candidates found. Labeling...`);
+    // Label passing candidates with enriched context
+    if (modeFilteredCandidates.length > 0) {
+      setProgress(`${modeFilteredCandidates.length} candidates found. Labeling...`);
       setLabeling(true);
 
       try {
@@ -112,7 +196,7 @@ export default function EWScannerPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            candidates: passingCandidates.map((c) => ({
+            candidates: modeFilteredCandidates.map((c) => ({
               ticker: c.ticker,
               ath: c.ath,
               low: c.low,
@@ -120,6 +204,11 @@ export default function EWScannerPage() {
               declinePct: c.declinePct,
               monthsDecline: c.monthsDecline,
               recoveryPct: c.recoveryPct,
+              fibZone: c.fibAnalysis?.depthLabel,
+              volumeTrend: c.volumeAnalysis?.volumeTrend,
+              swingCount: c.structureAnalysis?.swingCount,
+              structure: c.structureAnalysis?.classification,
+              scannerMode: mode,
             })),
             htf,
             ltf,
@@ -129,20 +218,21 @@ export default function EWScannerPage() {
         const labelData = await labelRes.json();
         setLabels(labelData.labels ?? {});
       } catch {
-        // Labels are non-critical — cards still show without them
+        // Labels are non-critical
       }
       setLabeling(false);
     }
 
     setProgress("");
     setScanning(false);
-  }, [universe, htf, ltf, minDecline, minMonths, minRecovery]);
+  }, [universe, htf, ltf, minDecline, minMonths, minRecovery, mode]);
 
   // --- Deep Analysis ---
   const runDeep = useCallback(
-    async (candidate: ScoredCandidate) => {
+    async (candidate: EnhancedScoredCandidate) => {
       setDeepTicker(candidate.ticker);
       setDeepAnalysis("");
+      setDeepStructured(null);
       setDeepLoading(true);
 
       try {
@@ -160,22 +250,64 @@ export default function EWScannerPage() {
             declinePct: candidate.declinePct,
             durationMonths: candidate.monthsDecline,
             recoveryPct: candidate.recoveryPct,
-            score: candidate.score,
+            score: candidate.enhancedScore,
             label: labels[candidate.ticker],
             htf,
             ltf,
+            weeklyCloses: candidate.series?.close,
+            fibZone: candidate.fibAnalysis?.depthLabel,
+            fibDepth: candidate.fibAnalysis
+              ? candidate.fibAnalysis.retracementDepth * 100
+              : undefined,
+            goldenZone: candidate.fibAnalysis?.withinGoldenZone,
+            volumeTrend: candidate.volumeAnalysis?.volumeTrend,
+            structure: candidate.structureAnalysis?.classification,
+            swingCount: candidate.structureAnalysis?.swingCount,
+            momentumScore: candidate.momentumAnalysis?.score,
+            scannerMode: mode,
           }),
         });
 
         const data = await res.json();
         setDeepAnalysis(data.analysis ?? "No analysis returned.");
+        if (data.structured) {
+          setDeepStructured(data.structured as DeepAnalysisResult);
+        }
       } catch {
         setDeepAnalysis("Failed to generate analysis.");
       }
       setDeepLoading(false);
     },
-    [htf, ltf, labels]
+    [htf, ltf, labels, mode]
   );
+
+  // --- Save Scan ---
+  const handleSave = useCallback(() => {
+    const name = `${getModeConfig(mode).shortLabel} - ${universe} - ${new Date().toLocaleDateString()}`;
+    saveScan(name, mode, universe, { minDecline, minMonths, minRecovery }, modeFiltered, labels);
+    setSavedScans(loadScans());
+  }, [mode, universe, minDecline, minMonths, minRecovery, modeFiltered, labels]);
+
+  const handleLoadScan = useCallback((scan: SavedScan) => {
+    setMode(scan.mode);
+    setUniverse(scan.universe as UniverseKey);
+    setMinDecline(scan.filters.minDecline);
+    setMinMonths(scan.filters.minMonths);
+    setMinRecovery(scan.filters.minRecovery);
+    // Restore candidates (without series data)
+    const restored = scan.candidates.map((c) => ({
+      ...c,
+      series: undefined,
+    })) as EnhancedScoredCandidate[];
+    setResults(restored);
+    setLabels(scan.labels);
+    setShowSaved(false);
+  }, []);
+
+  const handleDeleteScan = useCallback((id: string) => {
+    deleteScan(id);
+    setSavedScans(loadScans());
+  }, []);
 
   // --- Helpers ---
   const scoreTextColor = (n: number) => {
@@ -188,6 +320,17 @@ export default function EWScannerPage() {
     if (n >= 0.7) return "bg-green-500";
     if (n >= 0.4) return "bg-yellow-500";
     return "bg-red-500";
+  };
+
+  const confidenceBadge = (tier: string) => {
+    switch (tier) {
+      case "high":
+        return "bg-green-500/20 text-green-400 border-green-500/30";
+      case "probable":
+        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30";
+      default:
+        return "bg-gray-500/20 text-gray-400 border-gray-500/30";
+    }
   };
 
   const fmtYear = (y: number) => String(y);
@@ -216,7 +359,7 @@ export default function EWScannerPage() {
                 EW Scanner
               </h1>
               <p className="mt-1 text-[#a0a0a0]">
-                Elliott Wave live scanner with mechanical scoring and AI wave labeling.
+                Elliott Wave scanner with mechanical scoring, Fibonacci analysis, and AI wave labeling.
               </p>
             </div>
           </div>
@@ -234,6 +377,33 @@ export default function EWScannerPage() {
       <div className="flex flex-col gap-6 lg:flex-row">
         {/* ── Left Panel ── */}
         <aside className="w-full shrink-0 space-y-5 lg:w-72">
+          {/* Scanner Mode Tabs */}
+          <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+            <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#a0a0a0]">
+              Scanner Mode
+            </label>
+            <Tabs.Root value={mode} onValueChange={(v) => handleModeChange(v as ScannerMode)}>
+              <Tabs.List className="grid grid-cols-2 gap-2">
+                {SCANNER_MODES.map((m) => (
+                  <Tabs.Trigger
+                    key={m.key}
+                    value={m.key}
+                    className={`rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                      mode === m.key
+                        ? "bg-[#185FA5]/30 text-[#5ba3e6] ring-1 ring-[#185FA5]"
+                        : "bg-[#262626] text-[#a0a0a0] hover:text-white"
+                    }`}
+                  >
+                    {m.shortLabel}
+                  </Tabs.Trigger>
+                ))}
+              </Tabs.List>
+            </Tabs.Root>
+            <p className="mt-2 text-[10px] leading-tight text-[#666]">
+              {modeConfig.description}
+            </p>
+          </div>
+
           {/* HTF */}
           <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
             <label className="mb-2 block text-xs font-medium uppercase tracking-wider text-[#a0a0a0]">
@@ -302,7 +472,6 @@ export default function EWScannerPage() {
               Filters
             </label>
 
-            {/* Min Decline */}
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
                 <span className="text-[#a0a0a0]">Min Decline %</span>
@@ -318,7 +487,6 @@ export default function EWScannerPage() {
               />
             </div>
 
-            {/* Min Months */}
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
                 <span className="text-[#a0a0a0]">Min Duration</span>
@@ -334,7 +502,6 @@ export default function EWScannerPage() {
               />
             </div>
 
-            {/* Min Recovery */}
             <div>
               <div className="mb-1 flex items-center justify-between text-sm">
                 <span className="text-[#a0a0a0]">Min Recovery %</span>
@@ -368,20 +535,64 @@ export default function EWScannerPage() {
           {progress && (
             <p className="text-center text-xs text-[#a0a0a0]">{progress}</p>
           )}
+
+          {/* Saved Scans */}
+          {savedScans.length > 0 && (
+            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
+              <button
+                onClick={() => setShowSaved(!showSaved)}
+                className="flex w-full items-center justify-between text-xs font-medium uppercase tracking-wider text-[#a0a0a0]"
+              >
+                <span className="flex items-center gap-1.5">
+                  <FolderOpen className="h-3.5 w-3.5" />
+                  Saved Scans ({savedScans.length})
+                </span>
+                <ChevronRight
+                  className={`h-3.5 w-3.5 transition-transform ${showSaved ? "rotate-90" : ""}`}
+                />
+              </button>
+              {showSaved && (
+                <div className="mt-3 space-y-2">
+                  {savedScans.map((scan) => (
+                    <div
+                      key={scan.id}
+                      className="flex items-center justify-between rounded-md bg-[#262626] px-2.5 py-1.5"
+                    >
+                      <button
+                        onClick={() => handleLoadScan(scan)}
+                        className="min-w-0 flex-1 text-left"
+                      >
+                        <p className="truncate text-xs text-[#e6e6e6]">{scan.name}</p>
+                        <p className="text-[10px] text-[#666]">
+                          {scan.candidateCount} results
+                        </p>
+                      </button>
+                      <button
+                        onClick={() => handleDeleteScan(scan.id)}
+                        className="ml-2 shrink-0 p-1 text-[#666] hover:text-red-400"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </aside>
 
         {/* ── Right Panel ── */}
         <div className="flex-1 space-y-4">
-          {/* Export + Stats bar */}
+          {/* Export + Stats + Sort/Group bar */}
           {results.length > 0 && (
             <>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-4 text-sm">
                   <span className="text-[#a0a0a0]">
-                    <span className="font-bold text-white">{passed.length}</span> passed
+                    <span className="font-bold text-white">{modeFiltered.length}</span> passed
                   </span>
                   <span className="text-[#a0a0a0]">
-                    <span className="font-bold text-white">{failed.length}</span> filtered
+                    <span className="font-bold text-white">{results.length - modeFiltered.length}</span> filtered
                   </span>
                   {labeling && (
                     <span className="flex items-center gap-1 text-[#5ba3e6]">
@@ -392,19 +603,78 @@ export default function EWScannerPage() {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => exportToExcel(passed, labels)}
+                    onClick={handleSave}
+                    className="flex items-center gap-1.5 rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-xs text-[#a0a0a0] transition-colors hover:text-white"
+                    title="Save this scan"
+                  >
+                    <Save className="h-3.5 w-3.5" />
+                    Save
+                  </button>
+                  <button
+                    onClick={() => exportEnhancedToExcel(modeFiltered, labels, mode)}
                     className="flex items-center gap-1.5 rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-xs text-[#a0a0a0] transition-colors hover:text-white"
                   >
                     <FileSpreadsheet className="h-3.5 w-3.5" />
                     Excel
                   </button>
                   <button
-                    onClick={() => exportToCsv(passed, labels)}
+                    onClick={() => exportEnhancedToCsv(modeFiltered, labels, mode)}
                     className="flex items-center gap-1.5 rounded-md border border-[#2a2a2a] bg-[#1a1a1a] px-3 py-1.5 text-xs text-[#a0a0a0] transition-colors hover:text-white"
                   >
                     <FileDown className="h-3.5 w-3.5" />
                     CSV
                   </button>
+                </div>
+              </div>
+
+              {/* Sort + Group controls */}
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="flex items-center gap-1.5">
+                  <ArrowUpDown className="h-3.5 w-3.5 text-[#666]" />
+                  <Select.Root value={sortBy} onValueChange={(v) => setSortBy(v as SortKey)}>
+                    <Select.Trigger className="inline-flex items-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-2.5 py-1 text-xs text-[#a0a0a0]">
+                      <Select.Value />
+                    </Select.Trigger>
+                    <Select.Portal>
+                      <Select.Content className="rounded-md border border-[#2a2a2a] bg-[#1a1a1a] p-1 shadow-xl">
+                        <Select.Viewport>
+                          {(["score", "decline", "recovery", "sector", "confidence"] as SortKey[]).map((k) => (
+                            <Select.Item
+                              key={k}
+                              value={k}
+                              className="cursor-pointer rounded px-3 py-1.5 text-xs text-[#a0a0a0] outline-none hover:bg-[#262626] hover:text-white data-[highlighted]:bg-[#262626] data-[highlighted]:text-white"
+                            >
+                              <Select.ItemText>Sort: {k}</Select.ItemText>
+                            </Select.Item>
+                          ))}
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select.Portal>
+                  </Select.Root>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <Layers className="h-3.5 w-3.5 text-[#666]" />
+                  <Select.Root value={groupBy} onValueChange={(v) => setGroupBy(v as GroupKey)}>
+                    <Select.Trigger className="inline-flex items-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-2.5 py-1 text-xs text-[#a0a0a0]">
+                      <Select.Value />
+                    </Select.Trigger>
+                    <Select.Portal>
+                      <Select.Content className="rounded-md border border-[#2a2a2a] bg-[#1a1a1a] p-1 shadow-xl">
+                        <Select.Viewport>
+                          {(["none", "sector", "confidence"] as GroupKey[]).map((k) => (
+                            <Select.Item
+                              key={k}
+                              value={k}
+                              className="cursor-pointer rounded px-3 py-1.5 text-xs text-[#a0a0a0] outline-none hover:bg-[#262626] hover:text-white data-[highlighted]:bg-[#262626] data-[highlighted]:text-white"
+                            >
+                              <Select.ItemText>Group: {k}</Select.ItemText>
+                            </Select.Item>
+                          ))}
+                        </Select.Viewport>
+                      </Select.Content>
+                    </Select.Portal>
+                  </Select.Root>
                 </div>
               </div>
 
@@ -418,19 +688,24 @@ export default function EWScannerPage() {
                 <StatCard
                   icon={<TrendingDown className="h-4 w-4 text-red-400" />}
                   label="Avg Decline"
-                  value={`${(passed.reduce((s, r) => s + r.declinePct, 0) / (passed.length || 1)).toFixed(1)}%`}
+                  value={`${(modeFiltered.reduce((s, r) => s + r.declinePct, 0) / (modeFiltered.length || 1)).toFixed(1)}%`}
                 />
                 <StatCard
                   icon={<Clock className="h-4 w-4 text-yellow-400" />}
                   label="Avg Duration"
-                  value={`${(passed.reduce((s, r) => s + r.monthsDecline, 0) / (passed.length || 1)).toFixed(0)}mo`}
+                  value={`${(modeFiltered.reduce((s, r) => s + r.monthsDecline, 0) / (modeFiltered.length || 1)).toFixed(0)}mo`}
                 />
                 <StatCard
                   icon={<TrendingUp className="h-4 w-4 text-green-400" />}
                   label="Avg Recovery"
-                  value={`${(passed.reduce((s, r) => s + r.recoveryPct, 0) / (passed.length || 1)).toFixed(1)}%`}
+                  value={`${(modeFiltered.reduce((s, r) => s + r.recoveryPct, 0) / (modeFiltered.length || 1)).toFixed(1)}%`}
                 />
               </div>
+
+              {/* Sector heatmap when grouping by sector */}
+              {groupBy === "sector" && (
+                <EWSectorHeatmap candidates={modeFiltered} />
+              )}
             </>
           )}
 
@@ -439,7 +714,7 @@ export default function EWScannerPage() {
             <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-16 text-center">
               <Activity className="mx-auto h-12 w-12 text-[#333]" />
               <p className="mt-4 text-[#a0a0a0]">
-                Select a universe and filters, then click Scan to find Elliott Wave candidates.
+                Select a scanner mode, universe, and filters, then click Scan to find Elliott Wave candidates.
               </p>
             </div>
           )}
@@ -460,132 +735,59 @@ export default function EWScannerPage() {
             </div>
           )}
 
-          {/* Result cards */}
-          {passed.length > 0 && (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-              {passed.map((c, idx) => {
-                const pct = Math.round(c.normalizedScore * 100);
-                const isHigh = c.normalizedScore >= 0.7;
-                const declineDot = getDot(c.declinePct, minDecline);
-                const directionDot: DotStatus = c.athYear <= c.lowYear ? "pass" : "fail";
-                const durationDot = getDot(c.monthsDecline, minMonths);
-                const recoveryDot = getDot(c.recoveryPct, minRecovery);
-
-                return (
-                  <div
+          {/* Result cards (grouped or flat) */}
+          {grouped.map(({ groupLabel, items }) => (
+            <div key={groupLabel}>
+              {groupLabel !== "__all__" && (
+                <h3 className="mb-2 mt-4 text-sm font-semibold text-[#a0a0a0]">
+                  {groupLabel}
+                  <span className="ml-2 text-xs text-[#666]">({items.length})</span>
+                </h3>
+              )}
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
+                {items.map((c, idx) => (
+                  <CandidateCard
                     key={c.ticker}
-                    className={`ew-card-in group rounded-lg border bg-[#1a1a1a] transition-colors hover:border-[#3a3a3a] ${
-                      isHigh
-                        ? "border-green-500/40"
-                        : "border-[#2a2a2a]"
-                    }`}
-                    style={{ animationDelay: `${idx * 50}ms` }}
-                  >
-                    {/* ── Top: Ticker + Score ── */}
-                    <div className="flex items-center justify-between border-b border-[#2a2a2a] px-4 py-3">
-                      <div className="min-w-0">
-                        <span className="text-base font-bold text-white">{c.ticker}</span>
-                        <span className="ml-2 truncate text-xs text-[#a0a0a0]">{c.name}</span>
-                      </div>
-                      <div className="flex shrink-0 items-center gap-2">
-                        <div className="h-1.5 w-10 overflow-hidden rounded-full bg-[#262626]">
-                          <div
-                            className={`h-full rounded-full ${scoreBgColor(c.normalizedScore)}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        <span className={`text-sm font-bold ${scoreTextColor(c.normalizedScore)}`}>
-                          {pct}%
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* ── Body: Finding rows ── */}
-                    <div className="space-y-1.5 px-4 pt-3 pb-2">
-                      <FindingRow dot={declineDot} dotCss={dotCss} label="Decline" value={`${c.declinePct.toFixed(1)}% (≥${minDecline}%)`} />
-                      <FindingRow dot={directionDot} dotCss={dotCss} label="Direction" value={directionDot === "pass" ? "ATH → Low correct" : "ATH after Low"} />
-                      <FindingRow dot={durationDot} dotCss={dotCss} label="Duration" value={`${c.monthsDecline.toFixed(0)}mo (≥${minMonths}mo)`} />
-                      <FindingRow dot={recoveryDot} dotCss={dotCss} label="Recovery" value={`${c.recoveryPct.toFixed(1)}% (≥${minRecovery}%)`} />
-
-                      {/* EW Label (cyan dot) */}
-                      {labels[c.ticker] ? (
-                        <div className="flex items-start gap-2 text-xs">
-                          <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
-                          <span className="text-[#5ba3e6]">{labels[c.ticker]}</span>
-                        </div>
-                      ) : labeling ? (
-                        <div className="flex items-center gap-2">
-                          <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#333]" />
-                          <div className="h-3 w-3/4 animate-pulse rounded bg-[#262626]" />
-                        </div>
-                      ) : null}
-                    </div>
-
-                    {/* ── Price Grid ── */}
-                    <div className="mx-4 grid grid-cols-3 gap-2 border-t border-[#2a2a2a] py-3 text-center text-xs">
-                      <div>
-                        <p className="text-[#666]">ATH</p>
-                        <p className="font-mono font-medium text-[#e6e6e6]">${c.ath.toFixed(2)}</p>
-                        <p className="text-[#555]">{fmtYear(c.athYear)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[#666]">Low</p>
-                        <p className="font-mono font-medium text-red-400">${c.low.toFixed(2)}</p>
-                        <p className="text-[#555]">{fmtYear(c.lowYear)}</p>
-                      </div>
-                      <div>
-                        <p className="text-[#666]">Current</p>
-                        <p className="font-mono font-medium text-green-400">${c.current.toFixed(2)}</p>
-                      </div>
-                    </div>
-
-                    {/* ── Footer: Stats + Deep Analysis ── */}
-                    <div className="flex items-center justify-between border-t border-[#2a2a2a] px-4 py-2.5">
-                      <div className="flex gap-3 text-xs text-[#a0a0a0]">
-                        <span>
-                          <TrendingDown className="mr-0.5 inline h-3 w-3 text-red-400" />
-                          {c.declinePct.toFixed(1)}%
-                        </span>
-                        <span>
-                          <Clock className="mr-0.5 inline h-3 w-3 text-yellow-400" />
-                          {c.monthsDecline.toFixed(0)}mo
-                        </span>
-                        <span>
-                          <TrendingUp className="mr-0.5 inline h-3 w-3 text-green-400" />
-                          {c.recoveryPct.toFixed(1)}%
-                        </span>
-                      </div>
-                      <button
-                        onClick={() => runDeep(c)}
-                        className="flex items-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-2.5 py-1 text-xs text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
-                      >
-                        Deep Analysis
-                        <ChevronRight className="h-3 w-3" />
-                      </button>
-                    </div>
-                  </div>
-                );
-              })}
+                    c={c}
+                    idx={idx}
+                    labels={labels}
+                    labeling={labeling}
+                    mode={mode}
+                    minDecline={minDecline}
+                    minMonths={minMonths}
+                    minRecovery={minRecovery}
+                    getDot={getDot}
+                    dotCss={dotCss}
+                    scoreTextColor={scoreTextColor}
+                    scoreBgColor={scoreBgColor}
+                    confidenceBadge={confidenceBadge}
+                    fmtYear={fmtYear}
+                    runDeep={runDeep}
+                  />
+                ))}
+              </div>
             </div>
-          )}
+          ))}
 
           {/* Filtered out (collapsed) */}
           {failed.length > 0 && (
             <details className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a]">
               <summary className="cursor-pointer px-4 py-3 text-sm text-[#a0a0a0] hover:text-white">
-                {failed.length} tickers filtered out
+                {results.length - modeFiltered.length} tickers filtered out
               </summary>
               <div className="border-t border-[#2a2a2a] px-4 py-3">
                 <div className="flex flex-wrap gap-2">
-                  {failed.map((c) => (
-                    <span
-                      key={c.ticker}
-                      className="rounded bg-[#262626] px-2 py-0.5 text-xs text-[#666]"
-                      title={`Score: ${c.score}/7 | Decline: ${c.declinePct.toFixed(1)}% | ${c.monthsDecline.toFixed(0)}mo | Recovery: ${c.recoveryPct.toFixed(1)}%`}
-                    >
-                      {c.ticker}
-                    </span>
-                  ))}
+                  {results
+                    .filter((c) => !modeFiltered.includes(c))
+                    .map((c) => (
+                      <span
+                        key={c.ticker}
+                        className="rounded bg-[#262626] px-2 py-0.5 text-xs text-[#666]"
+                        title={`Score: ${c.enhancedScore.toFixed(1)}/${c.enhancedMax} | Decline: ${c.declinePct.toFixed(1)}% | Recovery: ${c.recoveryPct.toFixed(1)}%`}
+                      >
+                        {c.ticker}
+                      </span>
+                    ))}
                 </div>
               </div>
             </details>
@@ -598,11 +800,38 @@ export default function EWScannerPage() {
         <Dialog.Root open onOpenChange={() => setDeepTicker(null)}>
           <Dialog.Portal>
             <Dialog.Overlay className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm" />
-            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
+            <Dialog.Content className="fixed left-1/2 top-1/2 z-50 w-full max-w-xl -translate-x-1/2 -translate-y-1/2 rounded-xl border border-[#2a2a2a] bg-[#1a1a1a] p-6 shadow-xl">
               <div className="mb-4 flex items-center justify-between">
-                <Dialog.Title className="text-lg font-bold text-white">
-                  {deepTicker} — Deep Analysis
-                </Dialog.Title>
+                <div className="flex items-center gap-3">
+                  <Dialog.Title className="text-lg font-bold text-white">
+                    {deepTicker}
+                  </Dialog.Title>
+                  {deepStructured?.wavePosition && (
+                    <span className="rounded-full bg-[#185FA5]/30 px-2.5 py-0.5 text-xs font-medium text-[#5ba3e6]">
+                      {deepStructured.wavePosition}
+                    </span>
+                  )}
+                  {deepStructured?.confidence && (
+                    <span
+                      className={`rounded-full border px-2 py-0.5 text-[10px] font-medium ${confidenceBadge(deepStructured.confidence)}`}
+                    >
+                      {deepStructured.confidence}
+                    </span>
+                  )}
+                  {deepStructured?.riskLevel && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                        deepStructured.riskLevel === "Low"
+                          ? "bg-green-500/20 text-green-400"
+                          : deepStructured.riskLevel === "High"
+                            ? "bg-red-500/20 text-red-400"
+                            : "bg-yellow-500/20 text-yellow-400"
+                      }`}
+                    >
+                      Risk: {deepStructured.riskLevel}
+                    </span>
+                  )}
+                </div>
                 <Dialog.Close className="rounded-md p-1 text-[#a0a0a0] hover:text-white">
                   <X className="h-5 w-5" />
                 </Dialog.Close>
@@ -612,6 +841,60 @@ export default function EWScannerPage() {
                 <div className="flex items-center justify-center py-12">
                   <Loader2 className="h-6 w-6 animate-spin text-[#5ba3e6]" />
                   <span className="ml-2 text-sm text-[#a0a0a0]">Analyzing...</span>
+                </div>
+              ) : deepStructured?.primaryCount ? (
+                <div className="max-h-[60vh] space-y-4 overflow-y-auto pr-2">
+                  {/* Primary & Alternate counts */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-[#2a2a2a] bg-[#262626] p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-[#666]">Primary Count</p>
+                      <p className="mt-1 text-sm text-[#e6e6e6]">{deepStructured.primaryCount}</p>
+                    </div>
+                    <div className="rounded-lg border border-[#2a2a2a] bg-[#262626] p-3">
+                      <p className="text-[10px] uppercase tracking-wider text-[#666]">Alternate Count</p>
+                      <p className="mt-1 text-sm text-[#e6e6e6]">{deepStructured.alternateCount || "N/A"}</p>
+                    </div>
+                  </div>
+
+                  {/* Target & Invalidation */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {deepStructured.nextTarget && (
+                      <div className="rounded-lg border border-green-500/20 bg-green-500/5 p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-[#666]">Next Target</p>
+                        <p className="mt-1 text-lg font-bold text-green-400">
+                          ${deepStructured.nextTarget.toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                    {deepStructured.invalidation && (
+                      <div className="rounded-lg border border-red-500/20 bg-red-500/5 p-3">
+                        <p className="text-[10px] uppercase tracking-wider text-[#666]">Invalidation</p>
+                        <p className="mt-1 text-lg font-bold text-red-400">
+                          ${deepStructured.invalidation.toFixed(2)}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Key Levels */}
+                  {deepStructured.keyLevels?.length > 0 && (
+                    <div className="rounded-lg border border-[#2a2a2a] bg-[#262626] p-3">
+                      <p className="mb-2 text-[10px] uppercase tracking-wider text-[#666]">Key Levels</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {deepStructured.keyLevels.map((kl, i) => (
+                          <div key={i} className="flex justify-between text-xs">
+                            <span className="text-[#a0a0a0]">{kl.label}</span>
+                            <span className="font-mono text-[#e6e6e6]">${kl.price.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Summary */}
+                  <div className="whitespace-pre-wrap text-sm leading-relaxed text-[#c0c0c0]">
+                    {deepStructured.summary}
+                  </div>
                 </div>
               ) : (
                 <div className="max-h-[60vh] overflow-y-auto pr-2">
@@ -624,6 +907,192 @@ export default function EWScannerPage() {
           </Dialog.Portal>
         </Dialog.Root>
       )}
+    </div>
+  );
+}
+
+// ── Sub-components ──
+
+function CandidateCard({
+  c,
+  idx,
+  labels,
+  labeling,
+  minDecline,
+  minMonths,
+  minRecovery,
+  getDot,
+  dotCss,
+  scoreTextColor,
+  scoreBgColor,
+  confidenceBadge,
+  fmtYear,
+  runDeep,
+}: {
+  c: EnhancedScoredCandidate;
+  idx: number;
+  labels: Record<string, string>;
+  labeling: boolean;
+  mode: ScannerMode;
+  minDecline: number;
+  minMonths: number;
+  minRecovery: number;
+  getDot: (value: number, threshold: number) => "pass" | "warn" | "fail";
+  dotCss: Record<string, string>;
+  scoreTextColor: (n: number) => string;
+  scoreBgColor: (n: number) => string;
+  confidenceBadge: (tier: string) => string;
+  fmtYear: (y: number) => string;
+  runDeep: (c: EnhancedScoredCandidate) => void;
+}) {
+  const pct = Math.round(c.enhancedNormalized * 100);
+  const isHigh = c.enhancedNormalized >= 0.7;
+  const declineDot = getDot(c.declinePct, minDecline);
+  const directionDot: "pass" | "warn" | "fail" = c.athYear <= c.lowYear ? "pass" : "fail";
+  const durationDot = getDot(c.monthsDecline, minMonths);
+  const recoveryDot = getDot(c.recoveryPct, minRecovery);
+
+  return (
+    <div
+      className={`ew-card-in group rounded-lg border bg-[#1a1a1a] transition-colors hover:border-[#3a3a3a] ${
+        isHigh ? "border-green-500/40" : "border-[#2a2a2a]"
+      }`}
+      style={{ animationDelay: `${idx * 50}ms` }}
+    >
+      {/* Top: Ticker + Score + Confidence */}
+      <div className="flex items-center justify-between border-b border-[#2a2a2a] px-4 py-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <span className="text-base font-bold text-white">{c.ticker}</span>
+          <span className="truncate text-xs text-[#a0a0a0]">{c.name}</span>
+          <span
+            className={`rounded-full border px-1.5 py-0.5 text-[9px] font-medium ${confidenceBadge(c.confidenceTier)}`}
+          >
+            {c.confidenceTier}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          <div className="h-1.5 w-10 overflow-hidden rounded-full bg-[#262626]">
+            <div
+              className={`h-full rounded-full ${scoreBgColor(c.enhancedNormalized)}`}
+              style={{ width: `${pct}%` }}
+            />
+          </div>
+          <span className={`text-sm font-bold ${scoreTextColor(c.enhancedNormalized)}`}>
+            {pct}%
+          </span>
+        </div>
+      </div>
+
+      {/* Body: Finding rows */}
+      <div className="space-y-1.5 px-4 pt-3 pb-1">
+        <FindingRow dot={declineDot} dotCss={dotCss} label="Decline" value={`${c.declinePct.toFixed(1)}% (\u2265${minDecline}%)`} />
+        <FindingRow dot={directionDot} dotCss={dotCss} label="Direction" value={directionDot === "pass" ? "ATH \u2192 Low correct" : "ATH after Low"} />
+        <FindingRow dot={durationDot} dotCss={dotCss} label="Duration" value={`${c.monthsDecline.toFixed(0)}mo (\u2265${minMonths}mo)`} />
+        <FindingRow dot={recoveryDot} dotCss={dotCss} label="Recovery" value={`${c.recoveryPct.toFixed(1)}% (\u2265${minRecovery}%)`} />
+
+        {/* New analysis dots */}
+        {c.fibAnalysis && (
+          <FindingRow
+            dot={c.fibAnalysis.withinGoldenZone ? "pass" : c.fibAnalysis.retracementDepth >= 0.236 ? "warn" : "fail"}
+            dotCss={dotCss}
+            label="Fib Zone"
+            value={c.fibAnalysis.depthLabel}
+          />
+        )}
+        {c.volumeAnalysis && (
+          <FindingRow
+            dot={c.volumeAnalysis.confirmation ? "pass" : c.volumeAnalysis.volumeTrend === "neutral" ? "warn" : "fail"}
+            dotCss={dotCss}
+            label="Volume"
+            value={c.volumeAnalysis.volumeTrend}
+          />
+        )}
+        {c.structureAnalysis && (
+          <FindingRow
+            dot={c.structureAnalysis.classification === "impulsive" ? "pass" : c.structureAnalysis.classification === "corrective" ? "warn" : "fail"}
+            dotCss={dotCss}
+            label="Structure"
+            value={`${c.structureAnalysis.classification} (${c.structureAnalysis.swingCount} swings)`}
+          />
+        )}
+
+        {/* EW Label */}
+        {labels[c.ticker] ? (
+          <div className="flex items-start gap-2 text-xs">
+            <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-cyan-400" />
+            <span className="text-[#5ba3e6]">{labels[c.ticker]}</span>
+          </div>
+        ) : labeling ? (
+          <div className="flex items-center gap-2">
+            <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-[#333]" />
+            <div className="h-3 w-3/4 animate-pulse rounded bg-[#262626]" />
+          </div>
+        ) : null}
+      </div>
+
+      {/* Sparkline */}
+      {c.series && (
+        <div className="flex justify-center px-4 py-1">
+          <EWSparkline
+            series={c.series}
+            ath={c.ath}
+            low={c.low}
+            fibLevels={c.fibAnalysis?.levels}
+            width={200}
+            height={50}
+          />
+        </div>
+      )}
+
+      {/* Fib Bar */}
+      {c.fibAnalysis && (
+        <div className="flex justify-center px-4 pb-1">
+          <EWFibBar retracementDepth={c.fibAnalysis.retracementDepth} width={200} height={22} />
+        </div>
+      )}
+
+      {/* Price Grid */}
+      <div className="mx-4 grid grid-cols-3 gap-2 border-t border-[#2a2a2a] py-3 text-center text-xs">
+        <div>
+          <p className="text-[#666]">ATH</p>
+          <p className="font-mono font-medium text-[#e6e6e6]">${c.ath.toFixed(2)}</p>
+          <p className="text-[#555]">{fmtYear(c.athYear)}</p>
+        </div>
+        <div>
+          <p className="text-[#666]">Low</p>
+          <p className="font-mono font-medium text-red-400">${c.low.toFixed(2)}</p>
+          <p className="text-[#555]">{fmtYear(c.lowYear)}</p>
+        </div>
+        <div>
+          <p className="text-[#666]">Current</p>
+          <p className="font-mono font-medium text-green-400">${c.current.toFixed(2)}</p>
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between border-t border-[#2a2a2a] px-4 py-2.5">
+        <div className="flex gap-3 text-xs text-[#a0a0a0]">
+          <span>
+            <TrendingDown className="mr-0.5 inline h-3 w-3 text-red-400" />
+            {c.declinePct.toFixed(1)}%
+          </span>
+          <span>
+            <Clock className="mr-0.5 inline h-3 w-3 text-yellow-400" />
+            {c.monthsDecline.toFixed(0)}mo
+          </span>
+          <span>
+            <TrendingUp className="mr-0.5 inline h-3 w-3 text-green-400" />
+            {c.recoveryPct.toFixed(1)}%
+          </span>
+        </div>
+        <button
+          onClick={() => runDeep(c)}
+          className="flex items-center gap-1 rounded-md border border-[#2a2a2a] bg-[#262626] px-2.5 py-1 text-xs text-[#a0a0a0] transition-colors hover:border-[#3a3a3a] hover:text-white"
+        >
+          Deep Analysis
+          <ChevronRight className="h-3 w-3" />
+        </button>
+      </div>
     </div>
   );
 }
@@ -667,4 +1136,40 @@ function StatCard({
       <p className="text-xl font-bold text-white">{value}</p>
     </div>
   );
+}
+
+// ── Grouping helper ──
+
+function groupCandidates(
+  candidates: EnhancedScoredCandidate[],
+  groupKey: GroupKey
+): { groupLabel: string; items: EnhancedScoredCandidate[] }[] {
+  if (groupKey === "none") {
+    return [{ groupLabel: "__all__", items: candidates }];
+  }
+
+  const map = new Map<string, EnhancedScoredCandidate[]>();
+  for (const c of candidates) {
+    let key: string;
+    switch (groupKey) {
+      case "sector":
+        key = c.sector ?? "Other";
+        break;
+      case "confidence":
+        key = c.confidenceTier;
+        break;
+      case "wavePosition":
+        key = "Unknown";
+        break;
+      default:
+        key = "All";
+    }
+    const arr = map.get(key) ?? [];
+    arr.push(c);
+    map.set(key, arr);
+  }
+
+  return Array.from(map.entries())
+    .map(([groupLabel, items]) => ({ groupLabel, items }))
+    .sort((a, b) => b.items.length - a.items.length);
 }

@@ -8,8 +8,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: "ticker param required" }, { status: 400 });
   }
 
+  const detail = request.nextUrl.searchParams.get("detail") === "1";
+
   try {
-    const url = `${YAHOO_CHART}/${encodeURIComponent(ticker)}?interval=1mo&range=5y&includePrePost=false`;
+    const url = `${YAHOO_CHART}/${encodeURIComponent(ticker)}?interval=1wk&range=5y&includePrePost=false`;
     const res = await fetch(url, {
       headers: {
         "User-Agent":
@@ -36,11 +38,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "No OHLC data" }, { status: 404 });
     }
 
+    const opens: (number | null)[] = quote.open ?? [];
     const highs: (number | null)[] = quote.high ?? [];
     const lows: (number | null)[] = quote.low ?? [];
+    const closes: (number | null)[] = quote.close ?? [];
+    const volumes: (number | null)[] = quote.volume ?? [];
     const current: number = result.meta?.regularMarketPrice ?? 0;
 
-    // Find ATH (highest monthly high)
+    // Find ATH (highest weekly high)
     let athIdx = 0;
     let athValue = -Infinity;
     for (let i = 0; i < highs.length; i++) {
@@ -64,13 +69,46 @@ export async function GET(request: NextRequest) {
 
     const toYear = (ts: number) => new Date(ts * 1000).getFullYear();
 
-    return NextResponse.json({
+    const baseResponse: Record<string, unknown> = {
       ath: Math.round(athValue * 100) / 100,
       low: Math.round(lowValue * 100) / 100,
       current: Math.round(current * 100) / 100,
       athYear: toYear(timestamps[athIdx]),
       lowYear: toYear(timestamps[lowIdx]),
-    });
+    };
+
+    if (detail) {
+      // Build clean arrays, replacing nulls with previous valid value
+      const cleanOpen: number[] = [];
+      const cleanHigh: number[] = [];
+      const cleanLow: number[] = [];
+      const cleanClose: number[] = [];
+      const cleanVolume: number[] = [];
+      const cleanTimestamps: number[] = [];
+
+      for (let i = 0; i < timestamps.length; i++) {
+        if (closes[i] == null) continue;
+        cleanTimestamps.push(timestamps[i]);
+        cleanOpen.push(opens[i] ?? closes[i]!);
+        cleanHigh.push(highs[i] ?? closes[i]!);
+        cleanLow.push(lows[i] ?? closes[i]!);
+        cleanClose.push(closes[i]!);
+        cleanVolume.push(volumes[i] ?? 0);
+      }
+
+      baseResponse.series = {
+        timestamps: cleanTimestamps,
+        open: cleanOpen,
+        high: cleanHigh,
+        low: cleanLow,
+        close: cleanClose,
+        volume: cleanVolume,
+      };
+      baseResponse.athIdx = athIdx;
+      baseResponse.lowIdx = lowIdx;
+    }
+
+    return NextResponse.json(baseResponse);
   } catch (err) {
     return NextResponse.json(
       { error: err instanceof Error ? err.message : "Fetch failed" },

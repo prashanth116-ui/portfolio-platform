@@ -16,6 +16,16 @@ interface DeepInput {
   label?: string;
   htf: string;
   ltf: string;
+  // V2 enriched fields
+  weeklyCloses?: number[];
+  fibZone?: string;
+  fibDepth?: number;
+  goldenZone?: boolean;
+  volumeTrend?: string;
+  structure?: string;
+  swingCount?: number;
+  momentumScore?: number;
+  scannerMode?: string;
 }
 
 export async function POST(request: NextRequest) {
@@ -29,7 +39,27 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const prompt = `You are an expert Elliott Wave analyst. Provide a concise deep analysis (~150 words) for ${data.ticker} (${data.name}).
+  // Build price series context if available
+  let seriesContext = "";
+  if (data.weeklyCloses?.length) {
+    // Sample to ~50 data points for prompt efficiency
+    const closes = data.weeklyCloses;
+    const step = Math.max(1, Math.floor(closes.length / 50));
+    const sampled = closes.filter((_, i) => i % step === 0);
+    seriesContext = `\nWeekly closes (sampled, ${sampled.length} pts): [${sampled.map((p) => p.toFixed(2)).join(", ")}]`;
+  }
+
+  // Build analysis context
+  let analysisContext = "";
+  if (data.fibZone) {
+    analysisContext += `\n- Fibonacci zone: ${data.fibZone} (depth: ${(data.fibDepth ?? 0).toFixed(1)}%, golden zone: ${data.goldenZone ? "yes" : "no"})`;
+  }
+  if (data.volumeTrend) analysisContext += `\n- Volume trend: ${data.volumeTrend}`;
+  if (data.structure) analysisContext += `\n- Decline structure: ${data.structure} (${data.swingCount ?? 0} swings)`;
+  if (data.momentumScore != null) analysisContext += `\n- Momentum score: ${data.momentumScore.toFixed(2)} (-1 bearish to +1 bullish)`;
+  if (data.scannerMode) analysisContext += `\n- Scanner mode: ${data.scannerMode}`;
+
+  const prompt = `You are an expert Elliott Wave analyst. Provide a deep analysis for ${data.ticker} (${data.name}).
 
 Price data:
 - ATH: $${data.ath.toFixed(2)} (${data.athDate})
@@ -37,31 +67,56 @@ Price data:
 - Current: $${data.current.toFixed(2)}
 - Decline: ${data.declinePct.toFixed(1)}% over ${data.durationMonths.toFixed(0)} months
 - Recovery: ${data.recoveryPct.toFixed(1)}% from low
-- Mechanical score: ${data.score}/7
-${data.label ? `- Quick label: ${data.label}` : ""}
+- Mechanical score: ${data.score}/20
+${data.label ? `- Quick label: ${data.label}` : ""}${seriesContext}${analysisContext ? `\nTechnical analysis:${analysisContext}` : ""}
 
 Timeframes: ${data.htf} (primary) / ${data.ltf} (sub-waves)
 
-Analyze:
-1. Most likely Elliott Wave count (which wave are we in?)
-2. Key price levels to watch (support/resistance)
-3. Probable next move direction and target
-4. Risk level (Low/Medium/High)
-
-Be specific with price levels. Use standard EW notation (Wave 1-5, A-B-C).`;
+Reply with ONLY valid JSON in this exact format:
+{
+  "wavePosition": "e.g. Wave 2 bottom / Wave 4 correction / Wave 5 topping",
+  "confidence": "high" | "medium" | "low",
+  "primaryCount": "Primary EW count description",
+  "alternateCount": "Alternate EW count description",
+  "nextTarget": price_number_or_null,
+  "invalidation": price_number_or_null,
+  "keyLevels": [{"label": "Support 1", "price": 123.45}, {"label": "Resistance 1", "price": 234.56}],
+  "riskLevel": "Low" | "Medium" | "High",
+  "summary": "Concise 2-3 sentence analysis with specific price levels"
+}`;
 
   try {
     const client = new Anthropic();
     const msg = await client.messages.create({
       model: "claude-sonnet-4-5-20250929",
-      max_tokens: 600,
+      max_tokens: 800,
       messages: [{ role: "user", content: prompt }],
     });
 
     const text =
       msg.content[0].type === "text" ? msg.content[0].text : "";
 
-    return NextResponse.json({ analysis: text });
+    // Try JSON parse
+    try {
+      const parsed = JSON.parse(text);
+      return NextResponse.json({ analysis: text, structured: parsed });
+    } catch {
+      // Fall back to wrapping raw text in summary field
+      return NextResponse.json({
+        analysis: text,
+        structured: {
+          wavePosition: "",
+          confidence: "medium",
+          primaryCount: "",
+          alternateCount: "",
+          nextTarget: null,
+          invalidation: null,
+          keyLevels: [],
+          riskLevel: "Medium",
+          summary: text,
+        },
+      });
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ analysis: `Error: ${message}` });
