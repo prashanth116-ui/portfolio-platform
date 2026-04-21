@@ -9,6 +9,7 @@ import {
   FolderKanban,
   TrendingUp,
   ScanSearch,
+  Activity,
   Sparkles,
   Menu,
   X,
@@ -19,6 +20,7 @@ const navItems = [
   { href: "/projects", label: "Projects", icon: FolderKanban },
   { href: "/trading", label: "Trading", icon: TrendingUp },
   { href: "/scanner", label: "Scanner", icon: ScanSearch },
+  { href: "/ew-scanner", label: "EW Scanner", icon: Activity },
   { href: "/astrology", label: "Astrology", icon: Sparkles },
 ];
 

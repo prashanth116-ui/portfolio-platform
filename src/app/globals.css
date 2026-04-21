@@ -65,3 +65,40 @@ body {
 ::-webkit-scrollbar-thumb:hover {
   background: #444;
 }
+
+/* EW Scanner range sliders */
+.ew-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 6px;
+  border-radius: 3px;
+  background: #262626;
+  outline: none;
+}
+.ew-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #185FA5;
+  cursor: pointer;
+  border: 2px solid #0f0f0f;
+}
+.ew-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #185FA5;
+  cursor: pointer;
+  border: 2px solid #0f0f0f;
+}
+.ew-slider::-webkit-slider-runnable-track {
+  height: 6px;
+  border-radius: 3px;
+}
+.ew-slider::-moz-range-track {
+  height: 6px;
+  border-radius: 3px;
+  background: #262626;
+}
