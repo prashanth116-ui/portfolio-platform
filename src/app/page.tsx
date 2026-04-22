@@ -14,8 +14,43 @@ import {
   BookOpen,
 } from "lucide-react";
 
+// IDs shown in the Tools section — exclude from Software Projects to avoid duplication
+const TOOL_IDS = new Set(["ew_scanner", "ict_trading_dashboard"]);
+
+const TOOLS = [
+  {
+    name: "EW Scanner",
+    href: "https://ew-scanner.vercel.app",
+    external: true,
+    icon: BarChart3,
+    description:
+      "Algorithmic Elliott Wave scanner with Fibonacci analysis, multi-timeframe confirmation, and AI-powered deep analysis across 180+ stocks.",
+    tech: ["Next.js", "Claude API", "Yahoo Finance", "lightweight-charts"],
+  },
+  {
+    name: "ICT Dashboard",
+    href: "https://ict-mastery.vercel.app",
+    external: true,
+    icon: BookOpen,
+    description:
+      "Smart Money Concepts reference with 30+ interactive tabs, live kill zone timer, confluence scorer, and trade journal. PWA with offline support.",
+    tech: ["Next.js", "TypeScript", "Supabase", "PWA"],
+  },
+  {
+    name: "Stock Scanner",
+    href: "/scanner",
+    external: false,
+    icon: ScanSearch,
+    description:
+      "Pre-run TradingView screener data with filtering, sorting, and historical tracking. Updated every 15 minutes during market hours.",
+    tech: ["Next.js", "Supabase", "TradingView", "Vercel Cron"],
+  },
+];
+
 export default function HomePage() {
-  const activeProjects = projects.filter((p) => p.status !== "ARCHIVED");
+  const activeProjects = projects.filter(
+    (p) => p.status !== "ARCHIVED" && !TOOL_IDS.has(p.id)
+  );
 
   return (
     <div className="space-y-12">
@@ -35,7 +70,7 @@ export default function HomePage() {
         <MetricCard
           icon={FolderKanban}
           label="Active Projects"
-          value={activeProjects.length}
+          value={projects.filter((p) => p.status !== "ARCHIVED").length}
         />
         <MetricCard
           icon={TrendingUp}
@@ -47,7 +82,7 @@ export default function HomePage() {
           label="Strategies"
           value={strategies.length}
         />
-        <MetricCard icon={ScanSearch} label="Tools" value={3} />
+        <MetricCard icon={ScanSearch} label="Tools" value={TOOLS.length} />
       </section>
 
       {/* Software Projects */}
@@ -62,31 +97,42 @@ export default function HomePage() {
           </Link>
         </div>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {activeProjects.slice(0, 6).map((p) => (
-            <Link key={p.id} href="/projects">
-              <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
-                <h3 className="font-semibold text-white">{p.name}</h3>
-                <p className="mt-1 text-xs text-[#a0a0a0] line-clamp-2">
-                  {p.tagline}
-                </p>
-                <div className="mt-2 flex items-center justify-between">
-                  <StatusBadge status={p.status} />
-                  {p.tech_stack && (
-                    <div className="flex gap-1">
-                      {p.tech_stack.slice(0, 2).map((t) => (
-                        <span
-                          key={t}
-                          className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
-                        >
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  )}
+          {activeProjects.slice(0, 6).map((p) => {
+            const Wrapper = p.url ? "a" : Link;
+            const wrapperProps = p.url
+              ? { href: p.url, target: "_blank" as const, rel: "noopener noreferrer" }
+              : { href: "/projects" };
+            return (
+              <Wrapper key={p.id} {...wrapperProps}>
+                <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-semibold text-white">{p.name}</h3>
+                    {p.url && (
+                      <ExternalLink className="h-3.5 w-3.5 text-green-400" />
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-[#a0a0a0] line-clamp-2">
+                    {p.tagline}
+                  </p>
+                  <div className="mt-2 flex items-center justify-between">
+                    <StatusBadge status={p.status} />
+                    {p.tech_stack && (
+                      <div className="flex gap-1">
+                        {p.tech_stack.slice(0, 2).map((t) => (
+                          <span
+                            key={t}
+                            className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
+                          >
+                            {t}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            </Link>
-          ))}
+              </Wrapper>
+            );
+          })}
         </div>
       </section>
 
@@ -134,96 +180,41 @@ export default function HomePage() {
       <section>
         <h2 className="text-2xl font-bold text-white">Tools</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <a
-            href="https://ew-scanner.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-[#5ba3e6]" />
-                  <h3 className="font-semibold text-white">EW Scanner</h3>
+          {TOOLS.map((tool) => {
+            const Icon = tool.icon;
+            const Wrapper = tool.external ? "a" : Link;
+            const wrapperProps = tool.external
+              ? { href: tool.href, target: "_blank" as const, rel: "noopener noreferrer" }
+              : { href: tool.href };
+            return (
+              <Wrapper key={tool.name} {...wrapperProps}>
+                <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Icon className="h-5 w-5 text-[#5ba3e6]" />
+                      <h3 className="font-semibold text-white">{tool.name}</h3>
+                    </div>
+                    {tool.external && (
+                      <ExternalLink className="h-3.5 w-3.5 text-green-400" />
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-[#a0a0a0]">
+                    {tool.description}
+                  </p>
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {tool.tech.map((t) => (
+                      <span
+                        key={t}
+                        className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-                <ExternalLink className="h-3.5 w-3.5 text-green-400" />
-              </div>
-              <p className="mt-1 text-xs text-[#a0a0a0]">
-                Algorithmic Elliott Wave scanner with Fibonacci analysis,
-                multi-timeframe confirmation, and AI-powered deep analysis
-                across 180+ stocks.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["Next.js", "Claude API", "Yahoo Finance", "lightweight-charts"].map(
-                  (t) => (
-                    <span
-                      key={t}
-                      className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
-                    >
-                      {t}
-                    </span>
-                  )
-                )}
-              </div>
-            </div>
-          </a>
-
-          <a
-            href="https://ict-mastery.vercel.app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-[#5ba3e6]" />
-                  <h3 className="font-semibold text-white">ICT Dashboard</h3>
-                </div>
-                <ExternalLink className="h-3.5 w-3.5 text-green-400" />
-              </div>
-              <p className="mt-1 text-xs text-[#a0a0a0]">
-                Smart Money Concepts reference with 30+ interactive tabs,
-                live kill zone timer, confluence scorer, and trade journal.
-                PWA with offline support.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["Next.js", "TypeScript", "Supabase", "PWA"].map(
-                  (t) => (
-                    <span
-                      key={t}
-                      className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
-                    >
-                      {t}
-                    </span>
-                  )
-                )}
-              </div>
-            </div>
-          </a>
-
-          <Link href="/scanner">
-            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
-              <div className="flex items-center gap-2">
-                <ScanSearch className="h-5 w-5 text-[#5ba3e6]" />
-                <h3 className="font-semibold text-white">Stock Scanner</h3>
-              </div>
-              <p className="mt-1 text-xs text-[#a0a0a0]">
-                Pre-run TradingView screener data with filtering, sorting, and
-                historical tracking. Updated every 15 minutes during market hours.
-              </p>
-              <div className="mt-2 flex flex-wrap gap-1">
-                {["Next.js", "Supabase", "TradingView", "Vercel Cron"].map(
-                  (t) => (
-                    <span
-                      key={t}
-                      className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
-                    >
-                      {t}
-                    </span>
-                  )
-                )}
-              </div>
-            </div>
-          </Link>
+              </Wrapper>
+            );
+          })}
         </div>
       </section>
     </div>

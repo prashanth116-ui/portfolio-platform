@@ -154,7 +154,7 @@ export default function ScannerPage() {
                 Stock Scanner
               </h1>
               <p className="mt-1 text-[#a0a0a0]">
-                150+ stocks updated daily via Finnhub. Filter by sector and signal.
+                150+ stocks updated every 15 minutes during market hours. Filter by sector and signal.
               </p>
             </div>
           </div>
