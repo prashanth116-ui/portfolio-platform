@@ -9,6 +9,9 @@ import {
   Layers,
   ScanSearch,
   ArrowRight,
+  ExternalLink,
+  BarChart3,
+  BookOpen,
 } from "lucide-react";
 
 export default function HomePage() {
@@ -44,7 +47,7 @@ export default function HomePage() {
           label="Strategies"
           value={strategies.length}
         />
-        <MetricCard icon={ScanSearch} label="Tools" value={1} />
+        <MetricCard icon={ScanSearch} label="Tools" value={3} />
       </section>
 
       {/* Software Projects */}
@@ -131,6 +134,72 @@ export default function HomePage() {
       <section>
         <h2 className="text-2xl font-bold text-white">Tools</h2>
         <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <a
+            href="https://ew-scanner.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5 text-[#5ba3e6]" />
+                  <h3 className="font-semibold text-white">EW Scanner</h3>
+                </div>
+                <ExternalLink className="h-3.5 w-3.5 text-green-400" />
+              </div>
+              <p className="mt-1 text-xs text-[#a0a0a0]">
+                Algorithmic Elliott Wave scanner with Fibonacci analysis,
+                multi-timeframe confirmation, and AI-powered deep analysis
+                across 180+ stocks.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {["Next.js", "Claude API", "Yahoo Finance", "lightweight-charts"].map(
+                  (t) => (
+                    <span
+                      key={t}
+                      className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
+                    >
+                      {t}
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          </a>
+
+          <a
+            href="https://ict-mastery.vercel.app"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookOpen className="h-5 w-5 text-[#5ba3e6]" />
+                  <h3 className="font-semibold text-white">ICT Dashboard</h3>
+                </div>
+                <ExternalLink className="h-3.5 w-3.5 text-green-400" />
+              </div>
+              <p className="mt-1 text-xs text-[#a0a0a0]">
+                Smart Money Concepts reference with 30+ interactive tabs,
+                live kill zone timer, confluence scorer, and trade journal.
+                PWA with offline support.
+              </p>
+              <div className="mt-2 flex flex-wrap gap-1">
+                {["Next.js", "TypeScript", "Supabase", "PWA"].map(
+                  (t) => (
+                    <span
+                      key={t}
+                      className="rounded bg-[#2a2a2a] px-1.5 py-0.5 text-[10px] text-[#a0a0a0]"
+                    >
+                      {t}
+                    </span>
+                  )
+                )}
+              </div>
+            </div>
+          </a>
+
           <Link href="/scanner">
             <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
               <div className="flex items-center gap-2">

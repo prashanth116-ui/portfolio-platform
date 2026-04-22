@@ -120,3 +120,37 @@ RETURNS void AS $$
   DELETE FROM scanner_runs
   WHERE started_at < NOW() - INTERVAL '30 days';
 $$ LANGUAGE sql;
+
+-- ============================================================
+-- Astrology Reports
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS astrology_reports (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  status          TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','calculating','generating','complete','error')),
+  name            TEXT NOT NULL,
+  birth_date      DATE NOT NULL,
+  birth_time      TIME NOT NULL,
+  birth_place     TEXT NOT NULL,
+  latitude        NUMERIC(10,6) NOT NULL,
+  longitude       NUMERIC(10,6) NOT NULL,
+  timezone_offset NUMERIC(5,2) NOT NULL,
+  email           TEXT,
+  context         TEXT,
+  chart_data      JSONB,
+  validation_pass BOOLEAN DEFAULT FALSE,
+  report_html     TEXT,
+  report_sections JSONB,
+  error_message   TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  completed_at    TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_astrology_reports_status ON astrology_reports(status);
+CREATE INDEX IF NOT EXISTS idx_astrology_reports_created_at ON astrology_reports(created_at DESC);
+
+ALTER TABLE astrology_reports ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Public read astrology_reports" ON astrology_reports FOR SELECT USING (true);
+CREATE POLICY "Service write astrology_reports" ON astrology_reports FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');

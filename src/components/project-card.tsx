@@ -120,6 +120,16 @@ export function ProjectCard({ project }: { project: Project }) {
       )}
 
       <div className="mt-3 flex items-center gap-3 text-xs">
+        {project.url && (
+          <a
+            href={project.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-1 text-green-400 hover:text-green-300"
+          >
+            <ExternalLink className="h-3 w-3" /> Open App
+          </a>
+        )}
         {project.github_url && (
           <a
             href={project.github_url}
