@@ -231,6 +231,33 @@ export const projects: Project[] = [
     deployment: "N/A",
   },
 
+  {
+    id: "stablecoin_research",
+    name: "Stablecoin Market Audit",
+    tagline: "Comprehensive gap analysis of stablecoin infrastructure — 7 rated opportunities",
+    status: "RESEARCH",
+    completion: 15,
+    description:
+      "Deep market audit of the stablecoin ecosystem (June 2026) cross-referenced across 150+ sources. Covers checkout UX, off-ramp infrastructure, compliance frameworks (GENIUS Act, MiCA), yield products, AI agent payments, dispute resolution, and non-USD stablecoins. Identified 7 actionable gaps rated on opportunity, feasibility, timing, competition, and capital requirements.",
+    features: [
+      "7 rated gaps: checkout UX (8.7/10), off-ramp fragmentation (8.2), compliance-as-a-service (8.0), yield aggregation (7.8), AI agent payments (7.5), dispute resolution (7.2), non-USD stablecoins (6.8)",
+      "Competitor mapping: 40+ companies profiled across all 7 gap categories",
+      "Regulatory analysis: GENIUS Act (signed Jul 2025), MiCA (EU Jul 2026 deadline), CLARITY Act rewards loophole",
+      "Market sizing: $235B+ total stablecoin market cap, $4.1T+ monthly volume (Jun 2026)",
+      "VC funding tracker: $2.8B+ deployed into stablecoin infra in 2025-2026",
+      "Top opportunity: merchant checkout SDK — $45B+ addressable market, 12-18mo window before incumbents catch up",
+    ],
+    remaining: [
+      "Select gap to pursue and define MVP scope",
+      "Build technical architecture for chosen opportunity",
+      "Identify pilot customers / design partners",
+      "Prototype checkout SDK or compliance middleware",
+      "Validate with 5-10 merchant / fintech interviews",
+    ],
+    tech_stack: ["Market Research", "Regulatory Analysis", "Competitive Intelligence"],
+    deployment: "N/A",
+  },
+
   // ── Archived ──────────────────────────────────────────────────────
   {
     id: "trading_monorepo",
