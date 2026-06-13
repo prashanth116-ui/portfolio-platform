@@ -19,6 +19,9 @@ function StatCard({ item }: { item: StatItem }) {
       {item.subtitle && (
         <p className="mt-0.5 text-xs text-[#666]">{item.subtitle}</p>
       )}
+      {item.revised && (
+        <p className="mt-1 text-[10px] text-amber-500/80">{item.revised}</p>
+      )}
     </div>
   );
 }
@@ -54,7 +57,12 @@ function ScoreBar({ score, max = 10 }: { score: number; max?: number }) {
 
 function GapCard({ gap }: { gap: Gap }) {
   const color =
-    gap.score >= 8 ? "#00d97e" : gap.score >= 7 ? "#5ba3e6" : "#f6c343";
+    gap.score >= 8 ? "#00d97e" : gap.score >= 7 ? "#5ba3e6" : gap.score >= 6 ? "#f6c343" : "#6e84a3";
+  const directionIcon = gap.direction === "UP" ? "\u2191" : gap.direction === "DOWN" ? "\u2193" : "\u2192";
+  const directionColor = gap.direction === "UP" ? "#00d97e" : gap.direction === "DOWN" ? "#e63946" : "#a0a0a0";
+  const confidenceColor =
+    gap.confidence === "HIGH" ? "#00d97e" : gap.confidence === "MEDIUM-HIGH" ? "#5ba3e6" : "#f6c343";
+
   return (
     <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-5">
       <div className="flex items-start justify-between gap-3">
@@ -66,17 +74,41 @@ function GapCard({ gap }: { gap: Gap }) {
             <h4 className="font-semibold text-white">{gap.name}</h4>
           </div>
         </div>
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {gap.originalScore !== undefined && (
+            <span className="flex items-center gap-1 text-xs">
+              <span className="text-[#666] line-through">{gap.originalScore}</span>
+              <span style={{ color: directionColor }}>{directionIcon}</span>
+            </span>
+          )}
+          <span
+            className="rounded-full px-2.5 py-0.5 text-sm font-bold"
+            style={{ color, backgroundColor: `${color}15` }}
+          >
+            {gap.score}/10
+          </span>
+        </div>
+      </div>
+
+      {/* Confidence badge */}
+      <div className="mt-2 flex flex-wrap items-center gap-2">
         <span
-          className="flex-shrink-0 rounded-full px-2.5 py-0.5 text-sm font-bold"
-          style={{ color, backgroundColor: `${color}15` }}
+          className="rounded-full px-2 py-0.5 text-[10px] font-medium"
+          style={{ color: confidenceColor, backgroundColor: `${confidenceColor}15` }}
         >
-          {gap.score}/10
+          {gap.confidence} confidence
         </span>
       </div>
 
       <p className="mt-3 text-sm leading-relaxed text-[#c0c0c0]">
         {gap.summary}
       </p>
+
+      {gap.keyChange && (
+        <p className="mt-2 text-xs leading-relaxed text-amber-500/80">
+          {gap.keyChange}
+        </p>
+      )}
 
       {(gap.addressableMarket || gap.timeWindow) && (
         <div className="mt-3 flex flex-wrap gap-3 text-xs">
@@ -170,6 +202,11 @@ function CompetitorTable({
               >
                 <td className="py-2.5 pr-4 font-medium text-white whitespace-nowrap">
                   {c.name}
+                  {c.isNew && (
+                    <span className="ml-1.5 rounded bg-[#5ba3e6]/20 px-1 py-0.5 text-[10px] font-medium text-[#5ba3e6]">
+                      NEW
+                    </span>
+                  )}
                 </td>
                 <td className="py-2.5 pr-4 text-[#c0c0c0]">{c.description}</td>
                 <td className="py-2.5 pr-4 text-[#a0a0a0] whitespace-nowrap">
@@ -191,7 +228,14 @@ function CompetitorTable({
             key={c.name}
             className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-3"
           >
-            <p className="font-medium text-white">{c.name}</p>
+            <p className="font-medium text-white">
+              {c.name}
+              {c.isNew && (
+                <span className="ml-1.5 rounded bg-[#5ba3e6]/20 px-1 py-0.5 text-[10px] font-medium text-[#5ba3e6]">
+                  NEW
+                </span>
+              )}
+            </p>
             <p className="mt-1 text-xs text-[#c0c0c0]">{c.description}</p>
             <div className="mt-2 flex gap-3 text-xs text-[#a0a0a0]">
               {c.funding && <span>Funding: {c.funding}</span>}
@@ -208,9 +252,11 @@ function CompetitorTable({
 
 function RegulatoryCard({ reg }: { reg: Regulation }) {
   const statusColor =
-    reg.status.includes("Signed") || reg.status.includes("Enforcement")
+    reg.status.includes("Signed") || reg.status.includes("Full enforcement")
       ? "#00d97e"
-      : "#f6c343";
+      : reg.status.includes("Proposed") || reg.status.includes("Enacted")
+        ? "#f6c343"
+        : "#5ba3e6";
   return (
     <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
       <div className="flex items-start justify-between gap-3">

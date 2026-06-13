@@ -44,7 +44,14 @@ export default async function ProjectDetailPage({
               {project.name}
             </h1>
             <p className="mt-2 text-[#a0a0a0]">{content.subtitle}</p>
-            <p className="mt-1 text-xs text-[#666]">{content.date}</p>
+            <div className="mt-1 flex items-center gap-3 text-xs text-[#666]">
+              <span>{content.date}</span>
+              {content.lastValidated && (
+                <span className="rounded-full bg-[#00d97e]/10 px-2 py-0.5 text-[10px] font-medium text-[#00d97e]">
+                  Validated {content.lastValidated}
+                </span>
+              )}
+            </div>
           </div>
           <StatusBadge status={project.status} />
         </div>
