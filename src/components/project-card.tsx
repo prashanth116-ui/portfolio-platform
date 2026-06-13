@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ExternalLink, ChevronDown, ChevronUp } from "lucide-react";
+import Link from "next/link";
+import { ExternalLink, ChevronDown, ChevronUp, ChevronRight } from "lucide-react";
 import { StatusBadge } from "./status-badge";
 import type { Project } from "@/data/projects";
 
@@ -32,10 +33,22 @@ export function ProjectCard({ project }: { project: Project }) {
   const color = STATUS_COLORS[project.status] ?? "#6e84a3";
 
   return (
-    <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-5">
+    <div className={`rounded-lg border bg-[#1a1a1a] p-5 ${project.has_detail ? "border-[#2a2a2a] transition-colors hover:border-[#5ba3e6]/40" : "border-[#2a2a2a]"}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="text-lg font-semibold text-white">{project.name}</h3>
+          {project.has_detail ? (
+            <Link
+              href={`/projects/${project.id}`}
+              className="group flex items-center gap-1.5"
+            >
+              <h3 className="text-lg font-semibold text-white group-hover:text-[#5ba3e6]">
+                {project.name}
+              </h3>
+              <ChevronRight className="h-4 w-4 text-[#5ba3e6] opacity-0 transition-opacity group-hover:opacity-100" />
+            </Link>
+          ) : (
+            <h3 className="text-lg font-semibold text-white">{project.name}</h3>
+          )}
           <p className="mt-0.5 text-sm text-[#a0a0a0]">{project.tagline}</p>
         </div>
         <StatusBadge status={project.status} />
@@ -120,6 +133,14 @@ export function ProjectCard({ project }: { project: Project }) {
       )}
 
       <div className="mt-3 flex items-center gap-3 text-xs">
+        {project.has_detail && (
+          <Link
+            href={`/projects/${project.id}`}
+            className="flex items-center gap-1 text-[#5ba3e6] hover:text-[#7bb8ed]"
+          >
+            <ChevronRight className="h-3 w-3" /> View details
+          </Link>
+        )}
         {project.url && (
           <a
             href={project.url}

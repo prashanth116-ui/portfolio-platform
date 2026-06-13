@@ -12,6 +12,7 @@ export interface Project {
   tech_stack: string[];
   deployment?: string;
   url?: string;
+  has_detail?: boolean;
 }
 
 export const projects: Project[] = [
@@ -256,6 +257,7 @@ export const projects: Project[] = [
     ],
     tech_stack: ["Market Research", "Regulatory Analysis", "Competitive Intelligence"],
     deployment: "N/A",
+    has_detail: true,
   },
 
   // ── Archived ──────────────────────────────────────────────────────

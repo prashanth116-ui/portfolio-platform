@@ -101,7 +101,7 @@ export default function HomePage() {
             const Wrapper = p.url ? "a" : Link;
             const wrapperProps = p.url
               ? { href: p.url, target: "_blank" as const, rel: "noopener noreferrer" }
-              : { href: "/projects" };
+              : { href: p.has_detail ? `/projects/${p.id}` : "/projects" };
             return (
               <Wrapper key={p.id} {...wrapperProps}>
                 <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4 transition-colors hover:border-[#3a3a3a]">
