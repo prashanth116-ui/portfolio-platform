@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { projects } from "@/data/projects";
 import { strategies } from "@/data/strategies";
@@ -100,15 +99,8 @@ export default function HomePage() {
     <div className="space-y-12">
       {/* Hero */}
       <section className="flex flex-col items-center gap-8 sm:flex-row sm:items-start">
-        <div className="flex-shrink-0">
-          <Image
-            src="/photo.jpg"
-            alt="Prashanth Sundaram"
-            width={160}
-            height={160}
-            className="rounded-full border-2 border-[#2a2a2a]"
-            priority
-          />
+        <div className="flex h-40 w-40 flex-shrink-0 items-center justify-center rounded-full border-2 border-[#2a2a2a] bg-[#1a1a1a]">
+          <span className="text-5xl font-bold text-[#5ba3e6]">PS</span>
         </div>
         <div>
           <h1 className="text-4xl font-bold tracking-tight text-white sm:text-5xl">
