@@ -468,7 +468,7 @@ export default function ResearchMethodologyPage() {
           </p>
           <div className="mt-4 flex flex-wrap gap-3">
             <a
-              href="https://github.com/prashanth116-ui/portfolio-platform/blob/main/prompts/deep-research.md"
+              href="https://github.com/prashanth116-ui/portfolio-platform/blob/master/prompts/deep-research.md"
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex items-center gap-1.5 rounded-md bg-[#185FA5] px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#1a6dba]"
