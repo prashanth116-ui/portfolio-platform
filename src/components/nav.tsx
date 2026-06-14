@@ -10,6 +10,7 @@ import {
   TrendingUp,
   ScanSearch,
   Sparkles,
+  BookOpen,
   Menu,
   X,
 } from "lucide-react";
@@ -17,6 +18,7 @@ import {
 const navItems = [
   { href: "/", label: "Home", icon: Home },
   { href: "/projects", label: "Projects", icon: FolderKanban },
+  { href: "/research", label: "Research", icon: BookOpen },
   { href: "/trading", label: "Trading", icon: TrendingUp },
   { href: "/scanner", label: "Scanner", icon: ScanSearch },
   { href: "/astrology", label: "Astrology", icon: Sparkles },
