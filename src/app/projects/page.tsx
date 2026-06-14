@@ -1,5 +1,14 @@
+import type { Metadata } from "next";
 import { projects } from "@/data/projects";
 import { ProjectCard } from "@/components/project-card";
+import { MetricCard } from "@/components/metric-card";
+import { ArchivedSection } from "@/components/archived-toggle";
+
+export const metadata: Metadata = {
+  title: "Software Projects — Prashanth Sundaram",
+  description:
+    "20 projects spanning cloud infrastructure, SaaS, AI tools, real estate, and market research.",
+};
 
 type ProjectStatus = "ACTIVE" | "COMPLETE" | "IN_PROGRESS" | "RESEARCH" | "ARCHIVED";
 
@@ -7,7 +16,6 @@ const STATUS_GROUPS: { label: string; statuses: ProjectStatus[] }[] = [
   { label: "Active / Complete", statuses: ["ACTIVE", "COMPLETE"] },
   { label: "In Progress", statuses: ["IN_PROGRESS"] },
   { label: "Research", statuses: ["RESEARCH"] },
-  { label: "Archived", statuses: ["ARCHIVED"] },
 ];
 
 export default function ProjectsPage() {
@@ -16,6 +24,7 @@ export default function ProjectsPage() {
   );
   const inProgress = projects.filter((p) => p.status === "IN_PROGRESS");
   const research = projects.filter((p) => p.status === "RESEARCH");
+  const archived = projects.filter((p) => p.status === "ARCHIVED");
 
   return (
     <div className="space-y-10">
@@ -32,13 +41,13 @@ export default function ProjectsPage() {
 
       {/* Metrics */}
       <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <MetricBox label="Active / Complete" value={activeComplete.length} />
-        <MetricBox label="In Progress" value={inProgress.length} />
-        <MetricBox label="Research" value={research.length} />
-        <MetricBox label="Total" value={projects.length} />
+        <MetricCard label="Active / Complete" value={activeComplete.length} />
+        <MetricCard label="In Progress" value={inProgress.length} />
+        <MetricCard label="Research" value={research.length} />
+        <MetricCard label="Total" value={projects.length} />
       </section>
 
-      {/* Project Groups */}
+      {/* Project Groups (non-archived) */}
       {STATUS_GROUPS.map((group) => {
         const filtered = projects.filter((p) =>
           group.statuses.includes(p.status)
@@ -60,15 +69,9 @@ export default function ProjectsPage() {
           </section>
         );
       })}
-    </div>
-  );
-}
 
-function MetricBox({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
-      <span className="text-xs text-[#a0a0a0]">{label}</span>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
+      {/* Archived — hidden by default */}
+      <ArchivedSection projects={archived} />
     </div>
   );
 }

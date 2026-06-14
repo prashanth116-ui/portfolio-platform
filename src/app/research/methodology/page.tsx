@@ -1,5 +1,12 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Deep Research Methodology — Prashanth Sundaram",
+  description:
+    "Battle-tested prompt framework for market research: 6 phases, 12 anti-bias rules, built after 14 V1 failures in stablecoin gap analysis.",
+};
 import {
   CorrectionChart,
   CollapsiblePhase,
@@ -64,11 +71,11 @@ export default function ResearchMethodologyPage() {
     <div className="space-y-12">
       {/* Back link */}
       <Link
-        href="/projects"
+        href="/research"
         className="inline-flex items-center gap-1.5 text-sm text-[#5ba3e6] hover:text-[#7bb8ed]"
       >
         <ArrowLeft className="h-4 w-4" />
-        Back to Projects
+        Back to Research
       </Link>
 
       {/* ---- Section 1: Header ---- */}
@@ -499,7 +506,7 @@ export default function ResearchMethodologyPage() {
       <section className="space-y-4">
         <h2 className="text-xl font-semibold text-white">See It In Action</h2>
         <Link
-          href="/projects/stablecoin_research"
+          href="/research/stablecoin"
           className="group flex items-center gap-4 rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-5 transition-colors hover:border-[#5ba3e6]/30 hover:bg-[#1f1f1f]"
         >
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-[#5ba3e6]/15">

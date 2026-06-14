@@ -1,7 +1,15 @@
+import type { Metadata } from "next";
 import Link from "next/link";
 import { strategies } from "@/data/strategies";
 import { StrategyCard } from "@/components/strategy-card";
+import { MetricCard } from "@/components/metric-card";
 import { ArrowRight, GitBranch, Clock, BarChart3 } from "lucide-react";
+
+export const metadata: Metadata = {
+  title: "Trading Strategies — Prashanth Sundaram",
+  description:
+    "6 algorithmic trading strategies across futures and equities. V10.16 FVG is the active production strategy with 82.5% win rate.",
+};
 
 const STATUS_GROUPS = [
   { label: "Active", statuses: ["ACTIVE"] },
@@ -30,10 +38,10 @@ export default function TradingPage() {
       </section>
 
       <section className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <MetricBox label="Active Version" value="V10.16" />
-        <MetricBox label="Instruments" value="7" />
-        <MetricBox label="Strategies" value="6" />
-        <MetricBox label="Repos" value="3" />
+        <MetricCard label="Active Version" value="V10.16" />
+        <MetricCard label="Instruments" value="7" />
+        <MetricCard label="Strategies" value="6" />
+        <MetricCard label="Repos" value="3" />
       </section>
 
       <section className="grid gap-3 sm:grid-cols-3">
@@ -76,11 +84,3 @@ export default function TradingPage() {
   );
 }
 
-function MetricBox({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg border border-[#2a2a2a] bg-[#1a1a1a] p-4">
-      <span className="text-xs text-[#a0a0a0]">{label}</span>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-    </div>
-  );
-}
